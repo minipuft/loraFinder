@@ -1,0 +1,10 @@
+.imageItem {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.imageItem:hover {
+  opacity: 0.8;
+}

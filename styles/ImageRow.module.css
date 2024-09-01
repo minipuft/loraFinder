@@ -1,0 +1,5 @@
+.imageRow {
+  display: flex;
+  gap: 8px;
+  height: 100%; /* Adjust this value as needed */
+}

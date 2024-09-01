@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    // Specify ECMAScript target version
+    "target": "es5",
+    // List of library files to be included in the compilation
+    "lib": ["dom", "dom.iterable", "esnext"],
+    // Allow JavaScript files to be compiled
+    "allowJs": true,
+    // Skip type checking of declaration files
+    "skipLibCheck": true,
+    // Enable all strict type-checking options
+    "strict": true,
+    // Ensure consistent casing in file names
+    "forceConsistentCasingInFileNames": true,
+    // Do not emit outputs
+    "noEmit": true,
+    // Enable interoperability between CommonJS and ES Modules
+    "esModuleInterop": true,
+    // Specify module code generation
+    "module": "esnext",
+    // Specify module resolution strategy
+    "moduleResolution": "node",
+    // Enable importing .json files
+    "resolveJsonModule": true,
+    // Ensure each file can be safely transpiled without relying on other imports
+    "isolatedModules": true,
+    // Support JSX in .tsx files
+    "jsx": "preserve",
+    // Enable incremental compilation
+    "incremental": true,
+    // Base directory to resolve non-relative module names
+    "baseUrl": ".",
+    // Map paths for module names
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  // Specify files to include in compilation
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  // Specify files to exclude from compilation
+  "exclude": ["node_modules"]
+}

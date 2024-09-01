@@ -1,0 +1,63 @@
+.sidebar {
+    width: 275px;
+    height: 100vh;
+    background-color: #000;
+    color: #fff;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 30px;
+}
+
+.folderList {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.folderItem {
+    margin-bottom: 25px;
+}
+
+.folderButton {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    text-align: left;
+    cursor: pointer;
+    padding: 10px;
+    width: 100%;
+    transition: background-color 0.2s;
+    border-radius: 9999px;
+}
+
+.folderButton:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.selectedFolder {
+    font-weight: bold;
+}
+
+.uploadButton {
+    background-color: #1da1f2;
+    color: #fff;
+    border: none;
+    border-radius: 9999px;
+    padding: 15px 0;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: auto;
+    transition: background-color 0.2s;
+}
+
+.uploadButton:hover {
+    background-color: #1a91da;
+}

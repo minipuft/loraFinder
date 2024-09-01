@@ -1,0 +1,43 @@
+{
+  // Extend from Next.js' recommended ESLint configuration
+  "extends": "next/core-web-vitals",
+
+  // Additional rules specific to this project
+  "rules": {
+    // Enforce the use of semicolons
+    "semi": ["error", "always"],
+    // Enforce the use of single quotes
+    "quotes": ["error", "single"],
+    // Disallow unused variables
+    "no-unused-vars": "error",
+    // Enforce consistent indentation (2 spaces)
+    "indent": ["error", 2],
+    // Enforce consistent line endings (Unix-style LF)
+    "linebreak-style": ["error", "unix"],
+    // Require trailing commas in multiline object literals
+    "comma-dangle": ["error", "always-multiline"],
+    // Enforce consistent spacing before and after keywords
+    "keyword-spacing": ["error", { "before": true, "after": true }],
+    // Enforce consistent spacing inside braces
+    "object-curly-spacing": ["error", "always"]
+  },
+
+  // Parser options for ESLint
+  "parserOptions": {
+    // Use the latest ECMAScript version
+    "ecmaVersion": "latest",
+    // Use ECMAScript modules
+    "sourceType": "module",
+    // Enable JSX parsing
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+
+  // Environments where the code is intended to run
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true
+  }
+}

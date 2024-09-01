@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-900 text-white;
+}
+
+/* Scrollbar styles */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: theme('colors.gray.600') theme('colors.gray.800');
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  @apply bg-gray-800;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply bg-gray-600 rounded;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500;
+}
+
+/* Image grid styles */
+.visual-grid {
+  @apply grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4;
+}
+
+.visual-grid-item {
+  @apply break-inside-avoid mb-4;
+}
+
+.image-container {
+  @apply relative overflow-hidden rounded-lg shadow-md transition-transform duration-300 ease-in-out;
+}
+
+.image-container:hover {
+  @apply transform scale-105 shadow-lg;
+}
+
+/* Custom background styles */
+.bg-gradient {
+  @apply bg-gradient-to-br from-navy to-gray-900;
+}
+
+/* Typography */
+.text-shadow {
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Responsive padding */
+@screen sm {
+  .p-responsive {
+    @apply p-4;
+  }
+}
+
+@screen md {
+  .p-responsive {
+    @apply p-6;
+  }
+}
+
+@screen lg {
+  .p-responsive {
+    @apply p-8;
+  }
+}
+
+/* Navbar styles */
+.navbar {
+  @apply sticky top-0 z-50 bg-gray-800 shadow-md;
+}
+
+/* Improve button styles */
+.btn {
+  @apply px-4 py-2 rounded-md transition-all duration-300 ease-in-out;
+}
+
+.btn-primary {
+  @apply bg-red-500 text-white hover:bg-red-600;
+}
+
+/* Improve input styles */
+.input {
+  @apply w-full px-3 py-2 text-gray-700 bg-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:bg-white;
+}
+
+/* Improve layout utilities */
+.container {
+  @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+.flex-center {
+  @apply flex items-center justify-center;
+}
+
+.flex-between {
+  @apply flex items-center justify-between;
+}
