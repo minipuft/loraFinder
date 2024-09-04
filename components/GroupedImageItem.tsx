@@ -1,10 +1,13 @@
-import React from "react";
-import Image from "next/image";
-import { GroupedImageInfo } from "../types";
-import styles from "../styles/GroupedImageItem.module.css";
+import React from 'react';
+import { ImageInfo } from '@/types';
+import styles from '../styles/GroupedImageItem.module.css';
 
 interface GroupedImageItemProps {
-  group: GroupedImageInfo;
+  group: {
+    key: string;
+    images: ImageInfo[];
+    isCarousel: boolean;
+  };
   onClick: () => void;
   containerWidth: number;
   containerHeight: number;
@@ -18,32 +21,29 @@ const GroupedImageItem: React.FC<GroupedImageItemProps> = ({
   containerHeight,
   zoom,
 }) => {
-  const scaledWidth = containerWidth * zoom;
-  const scaledHeight = containerHeight * zoom;
+  const representativeImage = group.images[0];
 
   return (
     <div
-      className={`${styles.groupedImageWrapper} ${styles.smoothTransition}`}
-      style={{ width: scaledWidth, height: scaledHeight }}
+      className={styles.groupedImageWrapper}
+      style={{
+        width: containerWidth * zoom,
+        height: containerHeight * zoom,
+      }}
       onClick={onClick}
     >
-      <Image
-        src={group.images[0].src}
-        alt={group.images[0].alt}
-        layout="fill"
-        objectFit="cover"
+      <img
+        src={representativeImage.src}
+        alt={representativeImage.alt}
         className={styles.image}
       />
       {group.images.length > 1 && (
-        <div className={styles.countIndicator}>
-          <span>{group.images.length}</span>
+        <div className={styles.groupIndicator}>
+          +{group.images.length - 1}
         </div>
       )}
-      <div className={styles.imageTitle}>
-        <p className="text-sm font-medium truncate">{group.title}</p>
-      </div>
     </div>
   );
 };
 
-export default React.memo(GroupedImageItem);
+export default GroupedImageItem;

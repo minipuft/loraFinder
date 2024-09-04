@@ -1,7 +1,6 @@
 import React from "react";
 import ImageFeed from "./ImageFeed";
 import { ImageInfo } from "../types";
-import { groupImagesByName } from "../utils/imageUtils";
 
 // Define the props interface for the ImageViewer component
 interface ImageViewerProps {
@@ -9,6 +8,8 @@ interface ImageViewerProps {
   isLoading: boolean;
   error: string | null;
   selectedFolder: string;
+  isGrouped: boolean;
+  zoom: number;
 }
 
 // Define the ImageViewer component
@@ -17,6 +18,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   isLoading,
   error,
   selectedFolder,
+  isGrouped,
+  zoom,
 }) => {
 
   return (
@@ -32,7 +35,6 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
             <p>
               Please try again later or contact support if the problem persists.
             </p>
-            'j'
           </div>
         ) : isLoading ? (
           // Display loading message while images are being fetched
@@ -47,6 +49,8 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
           <ImageFeed
             images={images}
             isLoading={isLoading}
+            isGrouped={isGrouped}
+            zoom={zoom}
           />
         )}
       </div>

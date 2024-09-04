@@ -1,5 +1,5 @@
 // Import necessary dependencies and components
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import MainContent from './MainContent';
@@ -8,25 +8,30 @@ import { getImages } from '../lib/api'; // Assume this function exists to fetch 
 
 // Define the props interface for the Layout component
 interface LayoutProps {
+  children: React.ReactNode;
   folders: FolderInfo[];
   selectedFolder: string;
   onFolderChange: (folder: string) => void;
   currentDirectory: string;
   onSearch: (query: string) => void;
   zoom: number;
-  onZoomChange: (zoom: number) => void;
-  children: React.ReactNode;
+  onZoomChange: (newZoom: number) => void;
+  isGrouped: boolean;
+  onGroupToggle: () => void;
 }
 
 // Define the Layout component
-const Layout: React.FC<LayoutProps> = ({ 
-  folders, 
-  selectedFolder, 
+const Layout: React.FC<LayoutProps> = ({
+  children,
+  folders,
+  selectedFolder,
   onFolderChange,
   currentDirectory,
   onSearch,
   zoom,
   onZoomChange,
+  isGrouped,
+  onGroupToggle,
 }) => {
   // State variables for managing images, loading state, error, and search query
   const [images, setImages] = useState<ImageInfo[]>([]);
@@ -88,6 +93,8 @@ const Layout: React.FC<LayoutProps> = ({
         onSearch={handleSearch}
         zoom={zoom}
         onZoomChange={onZoomChange}
+        isGrouped={isGrouped}
+        onGroupToggle={onGroupToggle}
       />
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar component */}
@@ -106,6 +113,7 @@ const Layout: React.FC<LayoutProps> = ({
             error={error}
             onUploadComplete={handleUploadComplete}
             zoom={zoom}
+            isGrouped={isGrouped}
           />
         </main>
       </div>

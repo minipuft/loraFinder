@@ -12,6 +12,7 @@ interface MainContentProps {
   error: string | null;
   onUploadComplete: () => void;
   zoom: number;
+  isGrouped: boolean;
 }
 
 // MainContent component that renders the primary content area of the application
@@ -22,6 +23,8 @@ const MainContent: React.FC<MainContentProps> = ({
   isLoading,
   error,
   onUploadComplete,
+  zoom,
+  isGrouped,
 }) => {
   // Memoized filtered images based on the search query
   const filteredImages = useMemo(() => {
@@ -40,6 +43,8 @@ const MainContent: React.FC<MainContentProps> = ({
         isLoading={isLoading}
         error={error}
         selectedFolder={selectedFolder}
+        zoom={zoom}
+        isGrouped={isGrouped}
       />
       {/* Render the UploadFiles component */}
       <UploadFiles selectedFolder={selectedFolder} onUploadComplete={onUploadComplete} />

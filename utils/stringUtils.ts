@@ -1,11 +1,14 @@
-export function truncateImageTitle(title: string): string {
+export function truncateImageTitle(title: string | undefined): string {
+  if (!title) return "Untitled";
+
   // Remove file extension
   const withoutExtension = title.replace(/\.[^/.]+$/, "");
 
-  // Remove common suffixes
+  // Remove common suffixes and numbers at the end
   const cleanTitle = withoutExtension
     .replace(/\.(preview|thumbnail)$/, "")
-    .replace(/_thumb$/, "");
+    .replace(/_thumb$/, "")
+    .replace(/\s*\d+$/, ""); // Remove numbers at the end
 
   // Replace underscores and hyphens with spaces, then capitalize each word
   const formattedTitle = cleanTitle

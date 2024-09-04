@@ -3,29 +3,26 @@ import CurrentDirectoryButton from './CurrentDirectoryButton';
 import SearchBar from './SearchBar';
 import ZoomSlider from './ZoomSlider';
 import styles from '../styles/Navbar.module.css';
-import { useState } from 'react';
 
-// Define the props interface for the Navbar component
+// Update the props interface for the Navbar component
 interface NavbarProps {
   currentDirectory: string;
   onSearch: (query: string) => void;
+  zoom: number;
+  onZoomChange: (newZoom: number) => void;
+  isGrouped: boolean;
+  onGroupToggle: () => void;
 }
 
 // Define the Navbar component
 const Navbar: React.FC<NavbarProps> = ({
   currentDirectory,
   onSearch,
+  zoom,
+  onZoomChange,
+  isGrouped,
+  onGroupToggle,
 }) => {
-  // State to manage zoom level
-  const [zoom, setZoom] = useState(1);
-
-  // Handler for zoom changes
-  const handleZoomChange = (newZoom: number) => {
-    setZoom(newZoom);
-    // Dispatch a custom event to notify ImageFeed of zoom changes
-    window.dispatchEvent(new CustomEvent('zoomChange', { detail: newZoom }));
-  };
-
   // Render the Navbar component
   return (
     <nav className={styles.navbar}>
@@ -38,8 +35,12 @@ const Navbar: React.FC<NavbarProps> = ({
       </div>
       {/* Right section of the navbar */}
       <div className={styles.rightSection}>
+        {/* Add this button */}
+        <button onClick={onGroupToggle} className={styles.viewToggleButton}>
+          {isGrouped ? 'Ungroup' : 'Group'}
+        </button>
         {/* Zoom control slider */}
-        <ZoomSlider zoom={zoom} onZoomChange={handleZoomChange} />
+        <ZoomSlider zoom={zoom} onZoomChange={onZoomChange} />
       </div>
     </nav>
   );

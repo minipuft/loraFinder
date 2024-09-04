@@ -51,4 +51,4 @@ Provide your plan in the following format:
 [Any other important points to consider]
 </additional_considerations>
 
-Remember, your task is to plan and provide guidance, not to write the actual code. Focus on outlining the approach, potential challenges, and important considerations for implementing the requested changes.
+Remember, your task is to plan and provide guidance, not to write the actual code. Focus on outlining the approach, maintaining current functionality, potential challenges, and important considerations for implementing the requested changes.

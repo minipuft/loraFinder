@@ -21,6 +21,7 @@ const Home: React.FC = () => {
   const [currentDirectory, setCurrentDirectory] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGrouped, setIsGrouped] = useState<boolean>(true);
 
   /**
    * Effect hook to fetch the list of folders when the component mounts.
@@ -106,6 +107,14 @@ const Home: React.FC = () => {
     getImages(selectedFolder).then(setImages);
   };
 
+  /**
+   * Handler for grouping toggle.
+   * Toggles the grouping state.
+   */
+  const handleGroupToggle = () => {
+    setIsGrouped(prevState => !prevState);
+  };
+
   // Render the main layout with all necessary props
   return (
     <Layout
@@ -116,6 +125,8 @@ const Home: React.FC = () => {
       onSearch={handleSearch}
       zoom={zoom}
       onZoomChange={handleZoomChange}
+      isGrouped={isGrouped}
+      onGroupToggle={handleGroupToggle}
     >
       <MainContent
         images={images}
@@ -125,6 +136,7 @@ const Home: React.FC = () => {
         error={error}
         selectedFolder={selectedFolder}
         onUploadComplete={handleUploadComplete}
+        isGrouped={isGrouped}
       />
     </Layout>
   );

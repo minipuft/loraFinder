@@ -5,41 +5,91 @@ import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import styles from "../styles/ImageFeed.module.css";
 import ImageRow from "./ImageRow";
-import { groupImagesByName } from "../utils/imageUtils";
+import Captions from "yet-another-react-lightbox/plugins/captions";
+import Counter from "yet-another-react-lightbox/plugins/counter";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import Thumbnails from "yet-another-react-lightbox/plugins/thumbnails";
+import "yet-another-react-lightbox/plugins/thumbnails.css";
+import "yet-another-react-lightbox/plugins/captions.css";
+import "yet-another-react-lightbox/plugins/counter.css";
+import { truncateImageTitle } from "../utils/stringUtils";
 
 // Define the props interface for ImageFeed component
 interface ImageFeedProps {
   images: ImageInfo[];
   isLoading: boolean;
+  isGrouped: boolean;
+  zoom: number;
 }
 
 // Define the ImageFeed component
-const ImageFeed: React.FC<ImageFeedProps> = ({ images, isLoading }) => {
-  // State for managing displayed images, pagination, lightbox, columns, and zoom
+const ImageFeed: React.FC<ImageFeedProps> = ({ images, isLoading, isGrouped, zoom }) => {
+  // State for managing displayed images, pagination, lightbox, and columns
   const [displayedImages, setDisplayedImages] = useState<ImageInfo[]>(
     images.slice(0, 20)
   );
   const [hasMore, setHasMore] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number>(-1);
   const [columns, setColumns] = useState(4);
-  const [zoom, setZoom] = useState(1);
-  const [groupedImages, setGroupedImages] = useState<{
-    [key: string]: ImageInfo[];
-  }>({});
-  const [currentGroup, setCurrentGroup] = useState<string | null>(null);
+  const [lightboxImages, setLightboxImages] = useState<ImageInfo[]>([]);
 
-  // Callback function to handle image click and open lightbox
+  // Group images by similar titles
+  const groupedImages = useMemo(() => {
+    if (!isGrouped) {
+      return images.map(image => ({ key: image.id, images: [image], isCarousel: false }));
+    }
+    const groups: { [key: string]: ImageInfo[] } = {};
+    images.forEach((image) => {
+      const processedTitle = truncateImageTitle(image.alt);
+      if (!groups[processedTitle]) {
+        groups[processedTitle] = [];
+      }
+      groups[processedTitle].push(image);
+    });
+    return Object.entries(groups).map(([key, group]) => ({
+      key,
+      images: group,
+      isCarousel: group.length > 1
+    }));
+  }, [images, isGrouped]);
+
+  // Calculate rows with grouped images
+  const groupedRows = useMemo(() => {
+    const rows: ImageInfo[][] = [];
+    let currentRow: ImageInfo[] = [];
+    let currentAspectRatio = 0;
+
+    groupedImages.forEach((group) => {
+      const representativeImage = group.images[0];
+      const aspectRatio = representativeImage.width / representativeImage.height;
+      
+      if (currentAspectRatio + aspectRatio > columns && currentRow.length > 0) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentAspectRatio = 0;
+      }
+      
+      currentRow.push(representativeImage);
+      currentAspectRatio += aspectRatio;
+    });
+
+    if (currentRow.length > 0) {
+      rows.push(currentRow);
+    }
+
+    return rows;
+  }, [groupedImages, columns]);
+
+  // Update handleImageClick to work with grouped images and set lightbox plugins
   const handleImageClick = useCallback(
-    (image: ImageInfo) => {
-      const groupName = Object.keys(groupedImages).find((key) =>
-        groupedImages[key].some((img) => img.id === image.id)
+    (clickedImage: ImageInfo) => {
+      const groupIndex = groupedImages.findIndex(group =>
+        group.images.some(img => img.id === clickedImage.id)
       );
-      if (groupName) {
-        setCurrentGroup(groupName);
-        const index = groupedImages[groupName].findIndex(
-          (img) => img.id === image.id
-        );
-        setLightboxIndex(index);
+      if (groupIndex !== -1) {
+        const group = groupedImages[groupIndex];
+        setLightboxIndex(groupIndex);
+        setLightboxImages(group.images);
       }
     },
     [groupedImages]
@@ -65,8 +115,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ images, isLoading }) => {
     return `/api/image/${cleanPath}`;
   }, []);
 
-  // TODO: fix on-click image modal not selecting the correct image
-
   // Function to calculate the number of columns based on container width
   const calculateColumns = (containerWidth: number) => {
     if (containerWidth >= 2560) return 7;
@@ -91,89 +139,42 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ images, isLoading }) => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Effect hook to handle zoom changes
-  useEffect(() => {
-    // Function to update zoom state when a custom 'zoomChange' event is fired
-    const handleZoomChange = (event: CustomEvent) => {
-      setZoom(event.detail);
-    };
-
-    // Add event listener for 'zoomChange' event
-    window.addEventListener("zoomChange", handleZoomChange as EventListener);
-    // Cleanup function to remove event listener
-    return () => {
-      window.removeEventListener(
-        "zoomChange",
-        handleZoomChange as EventListener
-      );
-    };
-  }, []);
-
-  // Memoized calculation of image rows for efficient rendering
-  const imageRows = useMemo(() => {
-    const rows: ImageInfo[][] = [];
-    let currentRow: ImageInfo[] = [];
-    let currentAspectRatio = 0;
-
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      const aspectRatio = image.width / image.height;
-
-      if (currentAspectRatio + aspectRatio > columns && currentRow.length > 0) {
-        rows.push(currentRow);
-        currentRow = [];
-        currentAspectRatio = 0;
-      }
-
-      currentRow.push(image);
-      currentAspectRatio += aspectRatio;
-
-      if (i === images.length - 1) {
-        rows.push(currentRow);
-      }
-    }
-
-    return rows;
-  }, [images, columns]);
-
-  // Effect hook to handle grouped images
-  useEffect(() => {
-    const grouped = groupImagesByName(images);
-    setGroupedImages(grouped);
-  }, [images]);
-
   // Render the image grid
   return (
     <div className={styles.imageGrid}>
-      {/* Map through grouped images and render each row */}
-      {imageRows.map((rowImages, rowIndex) => (
+      {groupedRows.map((rowImages, rowIndex) => (
         <ImageRow
           key={rowIndex}
           images={rowImages}
           onImageClick={handleImageClick}
           columns={columns}
           zoom={zoom}
-          isLastRow={rowIndex === imageRows.length - 1}
-          rowHeight={200} // Add a fixed row height or calculate dynamically
+          isLastRow={rowIndex === groupedRows.length - 1}
+          rowHeight={200}
         />
       ))}
       {/* Show loading skeleton when images are being fetched */}
       {isLoading && <ImageSkeleton />}
       {/* Lightbox component for full-screen image viewing */}
       <Lightbox
-        slides={
-          currentGroup
-            ? groupedImages[currentGroup].map((img) => ({
-                src: getImageUrl(img.src),
-                alt: img.alt,
-              }))
-            : []
-        }
+        slides={lightboxImages.map(image => ({
+          src: image.src,
+          alt: image.alt,
+          title: truncateImageTitle(image.alt),
+          description: `Image ${image.id}`,
+        }))}
         open={lightboxIndex >= 0}
         index={lightboxIndex}
-        close={() => {
-          setLightboxIndex(-1);
-          setCurrentGroup(null);
+        close={() => setLightboxIndex(-1)}
+        plugins={[Captions, Counter, Zoom, ...(lightboxImages.length > 1 ? [Thumbnails] : [])]}
+        thumbnails={{
+          position: "bottom",
+          width: 120,
+          height: 80,
+          border: 1,
+          borderRadius: 4,
+          padding: 4,
+          gap: 16,
         }}
       />
     </div>

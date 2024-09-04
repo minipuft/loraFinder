@@ -19,6 +19,12 @@ export interface ImageInfo {
   title: string;
   width: number;
   height: number;
+  isGrouped?: boolean;
+  group?: {
+    key: string;
+    images: ImageInfo[];
+    isCarousel: boolean;
+  };
 }
 
 /**
@@ -54,4 +60,35 @@ export interface SearchProps {
 export interface ImageFeedProps {
   images: ImageInfo[];
   isLoading: boolean;
+}
+
+export interface ImageRowProps {
+  images: ImageInfo[];
+  onImageClick: (image: ImageInfo) => void;
+  columns: number;
+  zoom: number;
+  isLastRow: boolean;
+  rowHeight: number;
+}
+
+export interface LayoutProps {
+  children: React.ReactNode;
+  folders: FolderInfo[];
+  selectedFolder: string;
+  onFolderChange: (folder: string) => void;
+  currentDirectory: string;
+  onSearch: (query: string) => void;
+  zoom: number;
+  onZoomChange: (newZoom: number) => void;
+  isGrouped: boolean;
+  onGroupToggle: () => void;
+}
+
+export interface NavbarProps {
+  currentDirectory: string;
+  onSearch: (query: string) => void;
+  zoom: number;
+  onZoomChange: (newZoom: number) => void;
+  isGrouped: boolean;
+  onGroupToggle: () => void;
 }

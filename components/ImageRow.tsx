@@ -1,18 +1,18 @@
 import React, { useRef, useEffect, useState } from "react";
 import useWindowSize from "../hooks/useWindowSize";
-import { ImageInfo } from "@/types";
+import { ImageInfo, ImageRowProps } from "@/types";
 import ImageItem from "./ImageItem";
+import GroupedImageItem from "./GroupedImageItem";
 import styles from "../styles/ImageRow.module.css";
 
 // Define the props interface for the ImageRow component
 interface ImageRowProps {
   images: ImageInfo[];
-  onImageClick: (image: ImageInfo) => void;
+  onImageClick: (image: ImageInfo, groupImages: ImageInfo[]) => void;
   columns: number;
-  rowHeight: number;
   zoom: number;
   isLastRow: boolean;
-  renderImage: (image: ImageInfo) => React.ReactNode;
+  rowHeight: number;
 }
 
 // Define the ImageRow component
@@ -20,10 +20,9 @@ const ImageRow: React.FC<ImageRowProps> = ({
   images,
   onImageClick,
   columns,
-  rowHeight,
   zoom,
   isLastRow,
-  renderImage,
+  rowHeight,
 }) => {
   // Create a ref for the row div and a state for its width
   const rowRef = useRef<HTMLDivElement>(null);
@@ -37,13 +36,10 @@ const ImageRow: React.FC<ImageRowProps> = ({
     }
   }, [rowRef.current, windowWidth]);
 
-  const rowStyle: React.CSSProperties = {
-    display: "flex",
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-    height: `${rowHeight}px`,
-    marginBottom: "4px", // Add some margin between rows
-  };
+  // Add a check for images
+  if (!images || images.length === 0) {
+    return null; // or return a placeholder component
+  }
 
   // Calculate the total aspect ratio of all images in the row
   const totalAspectRatio = images.reduce(
@@ -78,26 +74,34 @@ const ImageRow: React.FC<ImageRowProps> = ({
     });
   }
 
+  const containerHeight =
+    isLastRow && images.length < columns
+      ? (imageWidths[0] / images[0].width) * images[0].height
+      : (imageWidths[0] / images[0].width) * images[0].height;
+
   return (
     <div ref={rowRef} className={styles.imageRow}>
-      {images.map((image, index) => {
-        const containerWidth = imageWidths[index];
-        const containerHeight =
-          isLastRow && images.length < columns
-            ? (containerWidth / image.width) * image.height
-            : (containerWidth / image.width) * image.height;
-
-        return (
+      {images.map((image, index) => (
+        image.isGrouped && image.group ? (
+          <GroupedImageItem
+            key={image.id}
+            group={image.group}
+            onClick={() => onImageClick(image)}
+            containerWidth={imageWidths[index]}
+            containerHeight={containerHeight}
+            zoom={zoom}
+          />
+        ) : (
           <ImageItem
             key={image.id}
             image={image}
             onClick={() => onImageClick(image)}
-            containerWidth={containerWidth}
+            containerWidth={imageWidths[index]}
             containerHeight={containerHeight}
             zoom={zoom}
           />
-        );
-      })}
+        )
+      ))}
     </div>
   );
 };

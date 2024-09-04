@@ -107,3 +107,31 @@ body {
 .flex-between {
   @apply flex items-center justify-between;
 }
+
+/* New lightbox styles */
+.yarl__thumbnails_container {
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
+.yarl__thumbnails_thumbnail {
+  border: 2px solid transparent;
+  transition: border-color 0.3s ease;
+}
+
+.yarl__thumbnails_thumbnail_active {
+  border-color: #fff;
+}
+
+.yarl__counter {
+  font-size: 14px;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.6);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.yarl__caption {
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 8px;
+  font-size: 14px;
+}
