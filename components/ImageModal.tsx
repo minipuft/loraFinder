@@ -1,45 +1,70 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
-import { ImageInfo } from '../types';
+import React, { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
+import { ImageInfo } from "../types";
 
+// Define the props interface for ImageModal component
 interface ImageModalProps {
   image: ImageInfo;
   onClose: () => void;
 }
 
+// Define the ImageModal component
 const ImageModal: React.FC<ImageModalProps> = ({ image, onClose }) => {
-  const [isLoaded, setIsLoaded] = useState(false);
+  // State to track if the image has loaded
+  const [imageLoaded, setImageLoaded] = useState(false);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose();
-    }
+  // Callback function to handle image load
+  const handleImageLoad = useCallback(() => {
+    setImageLoaded(true);
+  }, []);
+
+  // Effect to add and remove event listener for key press
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscapeKey);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
   }, [onClose]);
 
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleKeyDown]);
-
+  // Render the modal
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300 ease-in-out">
-      <div className={`bg-white rounded-lg p-8 max-w-4xl max-h-full overflow-auto transition-all duration-300 ease-in-out ${isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
-        <div className="relative aspect-w-1 aspect-h-1 mb-4">
+    // Modal overlay
+    <div className="fixed inset-0 bg-background-dark bg-opacity-75 flex items-center justify-center z-50">
+      {/* Modal content container */}
+      <div className="bg-background-light p-4 rounded-lg shadow-lg max-w-3xl w-full">
+        {/* Image container */}
+        <div className="relative aspect-w-16 aspect-h-9 mb-4">
+          {!imageLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+            </div>
+          )}
           <Image
-            src={image.src}
-            alt={image.alt}
-            layout="responsive"
+            src={image.url}
+            alt={image.name}
+            layout="fill"
             objectFit="contain"
-            onLoad={() => setIsLoaded(true)}
+            onLoad={handleImageLoad}
+            className={`rounded-lg transition-opacity duration-300 ${
+              imageLoaded ? "opacity-100" : "opacity-0"
+            }`}
           />
         </div>
-        <h2 className="text-2xl font-bold mb-2">{image.title}</h2>
-        <p className="text-gray-600 mb-4">{image.alt}</p>
+        {/* Image title */}
+        <h2 className="text-xl font-bold mb-2 text-gray-100">{image.name}</h2>
+        {/* Image description */}
+        <p className="text-gray-300 mb-4">{image.description}</p>
+        {/* Close button */}
         <button
           onClick={onClose}
-          className="bg-primary text-white px-4 py-2 rounded hover:bg-red-600 transition-colors duration-300 ease-in-out"
+          className="bg-primary text-gray-100 px-4 py-2 rounded hover:bg-opacity-90 transition-colors duration-300 ease-in-out"
         >
           Close
         </button>
@@ -48,4 +73,5 @@ const ImageModal: React.FC<ImageModalProps> = ({ image, onClose }) => {
   );
 };
 
+// Export the ImageModal component
 export default ImageModal;

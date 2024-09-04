@@ -1,13 +1,16 @@
 /**
- * Represents the information for an image in the application.
+ * Image Information Interface
+ * 
+ * This interface defines the structure for storing information about an image in the application.
+ * It includes properties for unique identification, source URL, alternative text, title, and dimensions.
  * 
  * @interface ImageInfo
  * @property {string} id - Unique identifier for the image.
  * @property {string} src - Source URL of the image.
- * @property {string} alt - Alternative text for the image.
- * @property {string} title - Title or name of the image.
- * @property {number} height - Height of the image.
- * @property {number} width - Width of the image.
+ * @property {string} alt - Alternative text for the image, important for accessibility.
+ * @property {string} title - Title or name of the image, used for display purposes.
+ * @property {number} width - Width of the image in pixels.
+ * @property {number} height - Height of the image in pixels.
  */
 export interface ImageInfo {
   id: string;
@@ -19,43 +22,34 @@ export interface ImageInfo {
 }
 
 /**
- * Represents the information for a folder in the application.
- * 
- * @interface FolderInfo
- * @property {string} name - Name of the folder.
+ * Folder Information Interface
+ * This interface represents the structure for storing information about a folder in the application.
+ * Currently, it only includes the name of the folder, but can be extended for additional properties if needed.
  */
 export interface FolderInfo {
   name: string;
 }
 
 /**
- * Represents the props for components that handle file uploads.
- * 
- * @interface UploadProps
- * @property {string} selectedFolder - The currently selected folder for upload.
- * @property {() => void} onUploadComplete - Callback function to be called when upload is complete.
+ * Upload Props Interface
+ * This interface defines the properties required for components that handle file uploads.
+ * It includes the currently selected folder and a callback function for when the upload is complete.
  */
 export interface UploadProps {
   selectedFolder: string;
   onUploadComplete: () => void;
 }
 
-/**
- * Represents the props for components that handle search functionality.
- * 
- * @interface SearchProps
- * @property {(query: string) => void} onSearch - Callback function to handle search queries.
- */
+/** This interface defines the properties required for components that handle search functionality.*/
 export interface SearchProps {
   onSearch: (query: string) => void;
 }
 
 /**
- * Represents the props for the ImageFeed component.
+ * Image Feed Props Interface
  * 
- * @interface ImageFeedProps
- * @property {ImageInfo[]} images - Array of image information to display.
- * @property {boolean} isLoading - Indicates if images are currently being loaded.
+ * This interface defines the properties required for the ImageFeed component.
+ * It includes an array of image information to display and a loading state indicator.
  */
 export interface ImageFeedProps {
   images: ImageInfo[];

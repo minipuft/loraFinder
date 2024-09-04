@@ -1,45 +1,34 @@
-import React from 'react';
-import { IconZoomIn, IconZoomOut } from '@tabler/icons-react';
+import React from "react";
+import { IconZoomIn, IconZoomOut } from "@tabler/icons-react";
 
-/**
- * Props for the ZoomSlider component.
- * @interface ZoomSliderProps
- * @property {number} zoom - Current zoom level.
- * @property {function} onZoomChange - Callback function to update zoom level.
- */
+// Define the props interface for the ZoomSlider component
 interface ZoomSliderProps {
   zoom: number;
   onZoomChange: (zoom: number) => void;
 }
 
-/**
- * ZoomSlider component for adjusting image zoom level.
- * 
- * @component
- * @param {ZoomSliderProps} props - The props for the ZoomSlider component.
- * @returns {JSX.Element} A slider with zoom in/out icons for adjusting image size.
- */
+// ZoomSlider component for adjusting image zoom level
 const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
   return (
-    <div className="flex items-center bg-gray-700 rounded-md p-1">
+    // Container for the zoom slider
+    <div className="flex items-center bg-gray-600 rounded-md p-1">
       {/* Zoom out icon */}
-      <IconZoomOut size={16} className="text-gray-400 mr-1" />
-      
+      <IconZoomOut size={16} className="text-gray-200 mr-1" />
       {/* Range input for zoom control */}
       <input
         type="range"
-        min="0.5"  // Minimum zoom level (50%)
-        max="2"    // Maximum zoom level (200%)
-        step="0.1" // Zoom increments
+        min="0.5"
+        max="2"
+        step="0.1"
         value={zoom}
         onChange={(e) => onZoomChange(parseFloat(e.target.value))}
-        className="w-20 mx-1 appearance-none bg-gray-600 h-1 rounded-full outline-none"
+        className="w-20 mx-1 appearance-none bg-gray-500 h-1 rounded-full outline-none"
       />
-      
       {/* Zoom in icon */}
-      <IconZoomIn size={16} className="text-gray-400 ml-1" />
+      <IconZoomIn size={16} className="text-gray-200 ml-1" />
     </div>
   );
 };
 
+// Export the ZoomSlider component
 export default ZoomSlider;

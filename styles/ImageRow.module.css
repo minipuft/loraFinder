@@ -1,5 +1,6 @@
 .imageRow {
   display: flex;
   gap: 8px;
-  height: 100%; /* Adjust this value as needed */
+  width: 100%; /* Make the row take up full width of its container */
 }
+

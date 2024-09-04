@@ -1,3 +1,4 @@
+/* Navbar container styles */
 .navbar {
   background-color: #1a1a1a;
   color: #f0f0f0;
@@ -8,12 +9,14 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Left section of the navbar */
 .leftSection {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
+/* Right section of the navbar */
 .rightSection {
   display: flex;
   align-items: center;

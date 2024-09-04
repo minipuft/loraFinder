@@ -1,3 +1,4 @@
+/* Styles for the individual image item container */
 .imageItem {
   position: relative;
   overflow: hidden;
@@ -5,6 +6,69 @@
   transition: opacity 0.3s ease;
 }
 
+/* Hover effect for the image item */
 .imageItem:hover {
   opacity: 0.8;
+}
+
+/* Wrapper for the image to control overflow */
+.imageWrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  will-change: transform, opacity;
+}
+
+.imageWrapper:hover {
+  opacity: 0.9;
+  transform: scale(1.03);
+}
+
+/* Styles for the image title overlay */
+.imageTitle {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px;
+  text-align: center;
+  transform: translateY(100%);
+  transition: transform 0.4s cubic-bezier(0.23, 1, 0.26, 1);
+  -webkit-transition: transform 0.4s cubic-bezier(0.23, 1, 0.26, 1);
+  -moz-transition: transform 0.4s cubic-bezier(0.23, 1, 0.26, 1);
+  -ms-transition: transform 0.4s cubic-bezier(0.23, 1, 0.26, 1);
+  -o-transition: transform 0.4s cubic-bezier(0.23, 1, 0.26, 1);
+  -webkit-transform: translateY(100%);
+  -moz-transform: translateY(100%);
+  -ms-transform: translateY(100%);
+  -o-transform: translateY(100%);
+}
+
+.imageWrapper:hover .imageTitle {
+  transform: translateY(0);
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s cubic-bezier(0.23, 1, 0.26, 1);
+  -webkit-transition: transform 0.3s cubic-bezier(0.23, 1, 0.26, 1);
+  -moz-transition: transform 0.3s cubic-bezier(0.23, 1, 0.26, 1);
+  -ms-transition: transform 0.3s cubic-bezier(0.23, 1, 0.26, 1);
+  -o-transition: transform 0.3s cubic-bezier(0.23, 1, 0.26, 1);
+}
+
+.image:hover {
+  transform: scale(1.05);
+}
+
+.smoothTransition {
+  transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    width 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    height 0.4s cubic-bezier(0.23, 1, 0.32, 1);
 }

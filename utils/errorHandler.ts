@@ -1,7 +1,13 @@
 import { NextApiResponse } from 'next';
 
 /**
+ * Error Handling Module
+ * This module provides utility functions for handling and managing errors in the application.
+ */
+
+/**
  * Handles API errors and sends an appropriate response.
+ * This function logs the error and sends a JSON response with error details.
  * 
  * @param {NextApiResponse} res - The response object to send the error.
  * @param {unknown} error - The error that occurred.
@@ -19,6 +25,7 @@ export function handleApiError(res: NextApiResponse, error: unknown, defaultMess
 
 /**
  * Creates a custom error with a specific status code.
+ * This function is useful for creating HTTP-specific errors.
  * 
  * @param {string} message - The error message.
  * @param {number} statusCode - The HTTP status code for the error.
@@ -32,6 +39,7 @@ export function createHttpError(message: string, statusCode: number): Error & { 
 
 /**
  * Checks if an error has a status code property.
+ * This function is a type guard for HTTP errors.
  * 
  * @param {unknown} error - The error to check.
  * @returns {boolean} True if the error has a statusCode property, false otherwise.
@@ -42,6 +50,7 @@ export function isHttpError(error: unknown): error is Error & { statusCode: numb
 
 /**
  * Logs an error with additional context information.
+ * This function provides detailed error logging, including stack traces when available.
  * 
  * @param {string} context - The context in which the error occurred.
  * @param {unknown} error - The error that occurred.

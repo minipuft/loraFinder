@@ -3,10 +3,7 @@ import ImageViewer from './ImageViewer';
 import UploadFiles from './UploadFiles';
 import { ImageInfo } from '../types';
 
-/**
- * Props for the MainContent component.
- * @interface MainContentProps
- */
+// Define the props interface for the MainContent component
 interface MainContentProps {
   images: ImageInfo[];
   selectedFolder: string;
@@ -17,14 +14,7 @@ interface MainContentProps {
   zoom: number;
 }
 
-/**
- * MainContent component that renders the primary content area of the application.
- * It includes the image feed, upload functionality, and current directory display.
- *
- * @component
- * @param {MainContentProps} props - The props for the MainContent component.
- * @returns {JSX.Element} The main content area of the application.
- */
+// MainContent component that renders the primary content area of the application
 const MainContent: React.FC<MainContentProps> = ({
   images,
   selectedFolder,
@@ -33,28 +23,29 @@ const MainContent: React.FC<MainContentProps> = ({
   error,
   onUploadComplete,
 }) => {
-  /**
-   * Memoized filtered images based on the search query.
-   * @type {ImageInfo[]}
-   */
+  // Memoized filtered images based on the search query
   const filteredImages = useMemo(() => {
     if (!searchQuery) return images;
     return images.filter(image => 
-      image.title.toLowerCase().includes(searchQuery.toLowerCase())
+      image.alt.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [images, searchQuery]);
 
+  // Render the main content
   return (
     <>
+      {/* Render the ImageViewer component */}
       <ImageViewer
         images={filteredImages}
         isLoading={isLoading}
         error={error}
         selectedFolder={selectedFolder}
       />
+      {/* Render the UploadFiles component */}
       <UploadFiles selectedFolder={selectedFolder} onUploadComplete={onUploadComplete} />
     </>
   );
 };
 
+// Export the MainContent component
 export default MainContent;

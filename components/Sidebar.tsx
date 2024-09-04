@@ -1,34 +1,50 @@
-import React from 'react';
-import { FolderInfo } from '../types';
-import styles from '../styles/Sidebar.module.css';
+import React from "react";
+import { FolderInfo } from "../types";
+import styles from "../styles/Sidebar.module.css";
 
+// Define the props interface for the Sidebar component
 interface SidebarProps {
   folders: FolderInfo[];
   selectedFolder: string;
   onFolderChange: (folder: string) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ folders, selectedFolder, onFolderChange }) => {
+// Define the Sidebar component
+const Sidebar: React.FC<SidebarProps> = ({
+  folders,
+  selectedFolder,
+  onFolderChange,
+}) => {
   return (
-    <aside className="w-64 flex-shrink-0 bg-gray-900 text-peach overflow-y-auto">
-      <div className={styles.sidebar}>
+    // Main sidebar container
+    <aside className="w-64 flex-shrink-0 bg-gray-900 text-peach flex flex-col h-screen">
+      <div className={`${styles.sidebar} flex flex-col h-full`}>
+        {/* Logo section */}
         <div className={styles.logo}>Lora Finder</div>
-        <ul className={styles.folderList}>
+        {/* Folder list */}
+        <ul className={`${styles.folderList} flex-grow overflow-y-auto`}>
+          {/* Map through folders and create buttons for each */}
           {folders.map((folder) => (
             <li key={folder.name} className={styles.folderItem}>
               <button
                 onClick={() => onFolderChange(folder.name)}
-                className={`${styles.folderButton} ${selectedFolder === folder.name ? styles.selectedFolder : ''}`}
+                className={`${styles.folderButton} ${
+                  selectedFolder === folder.name ? styles.selectedFolder : ""
+                }`}
               >
                 {folder.name}
               </button>
             </li>
           ))}
         </ul>
-        <button className={styles.uploadButton}>Upload</button>
+        {/* Upload button */}
+        <div className="p-8 mt-auto">
+          <button className={`${styles.uploadButton} w-full`}>Upload</button>
+        </div>
       </div>
     </aside>
   );
 };
 
+// Export the Sidebar component
 export default Sidebar;
