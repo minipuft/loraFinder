@@ -85,12 +85,15 @@ export function isFileSizeValid(fileSize: number, maxSize: number): boolean {
 export function groupImagesByName(images: ImageInfo[]): {
   [key: string]: ImageInfo[];
 } {
-  return images.reduce((groups, image) => {
-    const baseName = image.alt.split(".")[0].replace(/[_-]/g, " ").trim();
+  const groups: { [key: string]: ImageInfo[] } = {};
+
+  images.forEach((image) => {
+    const baseName = image.alt.replace(/\s*\(\d+\)$/, '').trim();
     if (!groups[baseName]) {
       groups[baseName] = [];
     }
     groups[baseName].push(image);
-    return groups;
-  }, {} as { [key: string]: ImageInfo[] });
+  });
+
+  return groups;
 }

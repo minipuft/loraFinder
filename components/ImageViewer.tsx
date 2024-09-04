@@ -18,7 +18,6 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
   error,
   selectedFolder,
 }) => {
-  const groupedImages = groupImagesByName(images);
 
   return (
     // Main container with flex layout
@@ -48,7 +47,6 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
           <ImageFeed
             images={images}
             isLoading={isLoading}
-            groupedImages={groupedImages}
           />
         )}
       </div>

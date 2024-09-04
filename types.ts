@@ -12,3 +12,10 @@ export interface FolderInfo {
   name: string;    // Name of the folder
   path: string;    // Path to the folder
 }
+
+// New interface for grouped images
+export interface GroupedImageInfo {
+  id: string;      // Unique identifier for the group
+  title: string;   // Title of the group
+  images: ImageInfo[]; // Array of ImageInfo objects
+}
