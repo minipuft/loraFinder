@@ -13,6 +13,7 @@ interface ImageRowProps {
   zoom: number;
   isLastRow: boolean;
   rowHeight: number;
+  groupedImages: { key: string; images: ImageInfo[]; isCarousel: boolean }[];
 }
 
 // Define the ImageRow component
@@ -22,6 +23,7 @@ const ImageRow: React.FC<ImageRowProps> = ({
   columns,
   zoom,
   isLastRow,
+  groupedImages,
   rowHeight,
 }) => {
   // Create a ref for the row div and a state for its width
@@ -81,27 +83,23 @@ const ImageRow: React.FC<ImageRowProps> = ({
 
   return (
     <div ref={rowRef} className={styles.imageRow}>
-      {images.map((image, index) => (
-        image.isGrouped && image.group ? (
-          <GroupedImageItem
-            key={image.id}
-            group={image.group}
-            onClick={() => onImageClick(image)}
-            containerWidth={imageWidths[index]}
-            containerHeight={containerHeight}
-            zoom={zoom}
-          />
-        ) : (
-          <ImageItem
-            key={image.id}
-            image={image}
-            onClick={() => onImageClick(image)}
-            containerWidth={imageWidths[index]}
-            containerHeight={containerHeight}
-            zoom={zoom}
-          />
-        )
-      ))}
+      {images.map((image, index) => {
+        const group = groupedImages.find(g => g.images.some(img => img.id === image.id));
+        const groupCount = group ? group.images.length : 1;
+
+        return (
+          <div key={image.id} className={styles.imageWrapper} style={{ width: imageWidths[index], height: containerHeight }}>
+            <ImageItem
+              image={image}
+              onClick={() => onImageClick(image, group ? group.images : [image])}
+              containerWidth={imageWidths[index]}
+              containerHeight={containerHeight}
+              zoom={zoom}
+              groupCount={groupCount}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 };

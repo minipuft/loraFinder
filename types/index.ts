@@ -64,7 +64,7 @@ export interface ImageFeedProps {
 
 export interface ImageRowProps {
   images: ImageInfo[];
-  onImageClick: (image: ImageInfo) => void;
+  onImageClick: (image: ImageInfo, groupImages: ImageInfo[]) => void;
   columns: number;
   zoom: number;
   isLastRow: boolean;

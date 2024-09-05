@@ -151,6 +151,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ images, isLoading, isGrouped, zoo
           zoom={zoom}
           isLastRow={rowIndex === groupedRows.length - 1}
           rowHeight={200}
+          groupedImages={groupedImages}
         />
       ))}
       {/* Show loading skeleton when images are being fetched */}
