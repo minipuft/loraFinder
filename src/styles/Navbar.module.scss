@@ -1,0 +1,14 @@
+/* Navbar container styles */
+.navbar {
+  @apply bg-gray-800 text-gray-100 py-2 px-4 flex items-center justify-between shadow-md;
+}
+
+/* Left section of the navbar */
+.leftSection {
+  @apply flex items-center gap-4;
+}
+
+/* Right section of the navbar */
+.rightSection {
+  @apply flex items-center;
+}

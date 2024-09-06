@@ -1,0 +1,15 @@
+.imageRow {
+  display: flex;
+  gap: 8px;
+  width: 100%; /* Make the row take up full width of its container */
+
+  &__item {
+    // Add styles for individual items in the row
+    flex: 1;
+    min-width: 0; // Allows flex items to shrink below their minimum content size
+  }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,25 @@
+// Colors
+$background-dark: #1a1a1a;
+$gray-100: #f3f4f6;
+$gray-500: #6b7280;
+$gray-600: #4b5563;
+$gray-700: #374151;
+
+// Gradients
+$gradient-from: $background-dark;
+$gradient-to: $gray-700;
+
+// Transitions
+$transition-duration: 300ms;
+$transition-timing: ease-in-out;
+
+// Breakpoints
+$sm: 640px;
+$md: 768px;
+$lg: 1024px;
+
+// Scrollbar
+$scrollbar-width: 1.5px;
+
+// Image grid
+$grid-gap: 1rem;

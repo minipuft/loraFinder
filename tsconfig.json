@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     // Specify ECMAScript target version
-    "target": "es5",
+    "target": "ESNext",
     // List of library files to be included in the compilation
     "lib": ["dom", "dom.iterable", "esnext"],
     // Allow JavaScript files to be compiled
@@ -13,11 +13,11 @@
     // Ensure consistent casing in file names
     "forceConsistentCasingInFileNames": true,
     // Do not emit outputs
-    "noEmit": true,
+    "noEmit": false,
     // Enable interoperability between CommonJS and ES Modules
     "esModuleInterop": true,
     // Specify module code generation
-    "module": "esnext",
+    "module": "ESNext",
     // Specify module resolution strategy
     "moduleResolution": "node",
     // Enable importing .json files
@@ -25,18 +25,24 @@
     // Ensure each file can be safely transpiled without relying on other imports
     "isolatedModules": true,
     // Support JSX in .tsx files
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     // Enable incremental compilation
     "incremental": true,
     // Base directory to resolve non-relative module names
     "baseUrl": ".",
     // Map paths for module names
     "paths": {
-      "@/*": ["./*"]
-    }
+      "@/*": ["src/*"]
+    },
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "sourceMap": true,
+    "allowSyntheticDefaultImports": true
   },
-  // Specify files to include in compilation
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
-  // Specify files to exclude from compilation
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
+  "include": ["src/**/*", "vite.config.ts", "server.ts"],
   "exclude": ["node_modules"]
 }

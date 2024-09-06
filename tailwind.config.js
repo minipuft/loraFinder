@@ -1,6 +1,7 @@
 module.exports = {
   // Specify the files Tailwind should scan for classes
   content: [
+    "./src/**/*.{js,ts,jsx,tsx}",
     "./pages/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
   ],

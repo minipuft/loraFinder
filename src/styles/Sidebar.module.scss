@@ -1,0 +1,42 @@
+/* Sidebar container styles */
+.sidebar {
+  @apply w-64 h-screen bg-gray-900 text-gray-100 p-5 flex flex-col;
+}
+
+/* Logo styles */
+.logo {
+  @apply text-2xl font-bold mb-8 text-primary;
+}
+
+/* Folder list styles */
+.folderList {
+  @apply list-none p-0 m-0;
+}
+
+/* Individual folder item styles */
+.folderItem {
+  @apply mb-6;
+}
+
+/* Folder button styles */
+.folderButton {
+  @apply bg-transparent border-none text-gray-100 text-lg text-left cursor-pointer p-2.5 w-full transition-colors duration-200 rounded-full;
+
+  &:hover {
+    @apply bg-primary bg-opacity-10;
+  }
+}
+
+/* Selected folder styles */
+.selectedFolder {
+  @apply font-bold text-primary;
+}
+
+/* Upload button styles */
+.uploadButton {
+  @apply bg-primary text-gray-900 border-none rounded-full py-4 text-lg font-bold cursor-pointer mt-auto transition-colors duration-200;
+
+  &:hover {
+    @apply bg-secondary;
+  }
+}
