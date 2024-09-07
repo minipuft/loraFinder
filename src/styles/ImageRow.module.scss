@@ -9,6 +9,9 @@
     min-width: 0; // Allows flex items to shrink below their minimum content size
   }
 
+  transition: transform 0.5s ease-out;
+  will-change: transform;
+
   @media (max-width: 768px) {
     flex-direction: column;
   }

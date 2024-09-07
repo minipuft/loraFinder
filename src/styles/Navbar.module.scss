@@ -1,6 +1,9 @@
 /* Navbar container styles */
 .navbar {
-  @apply bg-gray-800 text-gray-100 py-2 px-4 flex items-center justify-between shadow-md;
+  position: relative;
+  overflow: hidden;
+  @apply bg-transparent text-gray-100 py-4 px-6 flex items-center justify-between relative z-10;
+  font-family: 'Orbitron', sans-serif;
 }
 
 /* Left section of the navbar */
@@ -11,4 +14,43 @@
 /* Right section of the navbar */
 .rightSection {
   @apply flex items-center;
+}
+
+.navbarBackground {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+
+  path {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 2;
+  }
+}
+
+@keyframes morph {
+  0% {
+    d: path("M0,0 Q50,0 100,0 T200,0 T300,0 T400,0 V100 Q350,100 300,100 T200,100 T100,100 T0,100 Z");
+  }
+  100% {
+    d: path("M0,0 Q50,20 100,10 T200,30 T300,5 T400,25 V100 Q350,80 300,90 T200,70 T100,95 T0,75 Z");
+  }
+}
+
+.leftSection, .rightSection {
+  @apply flex items-center space-x-4;
+}
+
+.viewToggleButton {
+  @apply bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ease-in-out;
+  backdrop-filter: blur(5px);
+  background-color: rgba(59, 130, 246, 0.5);
+
+  &:hover {
+    @apply bg-blue-600;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+  }
 }

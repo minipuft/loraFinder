@@ -1,6 +1,7 @@
 import React from "react";
 import { FolderInfo } from "../types.js";
 import styles from "../styles/Sidebar.module.scss";
+import { motion } from 'framer-motion';
 
 // Define the props interface for the Sidebar component
 interface SidebarProps {
@@ -17,7 +18,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   return (
     // Main sidebar container
-    <aside className="w-64 flex-shrink-0 bg-gray-900 text-peach flex flex-col h-screen">
+    <motion.div
+      initial={{ x: -300 }}
+      animate={{ x: 0 }}
+      transition={{ type: 'spring', stiffness: 120 }}
+      className={styles.sidebar}
+    >
       <div className={`${styles.sidebar} flex flex-col h-full`}>
         {/* Logo section */}
         <div className={styles.logo}>Lora Finder</div>
@@ -42,7 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <button className={`${styles.uploadButton} w-full`}>Upload</button>
         </div>
       </div>
-    </aside>
+    </motion.div>
   );
 };
 

@@ -1,4 +1,5 @@
 /* Tailwind CSS imports */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap');
 @import "./variables.scss";
 @import 'tailwindcss/base';
 @import 'tailwindcss/components';
@@ -6,7 +7,9 @@
 
 /* Base styles */
 body {
-  @apply bg-background-dark text-gray-100;
+  @apply bg-transparent text-gray-100;
+  font-family: 'Orbitron', sans-serif;
+  background-color: transparent;
 }
 
 /* Scrollbar styles */
@@ -136,4 +139,94 @@ body {
   background-color: rgba(0, 0, 0, 0.8);
   padding: 8px;
   font-size: 14px;
+}
+
+/* Immersive styles */
+.immersive-shadow {
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3);
+}
+
+.immersive-transition {
+  transition: all 0.3s ease-out;
+}
+
+.hover-lift {
+  &:hover {
+    transform: translateY(-5px);
+  }
+}
+
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+}
+
+.parallax-container {
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  perspective: 1px;
+}
+
+.parallax-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.parallax-back {
+  transform: translateZ(-1px) scale(2);
+}
+
+.parallax-base {
+  transform: translateZ(0);
+}
+
+.image-feed {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+.image-row {
+  transition: transform 0.5s ease-out;
+  will-change: transform;
+}
+
+/* Custom properties for dynamic styling */
+:root {
+  --scroll-y: 0;
+  --mouse-x: 0;
+  --mouse-y: 0;
+}
+
+body {
+  background-color: transparent;
+}
+
+.gradient-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    calc(180deg + var(--scroll-y) * 0.1deg),
+    rgba(26, 26, 26, 0.2),
+    rgba(55, 65, 81, 0.2)
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Add Orbitron font import */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap');
+
+/* Apply Orbitron font to body */
+body {
+  font-family: 'Orbitron', sans-serif;
 }

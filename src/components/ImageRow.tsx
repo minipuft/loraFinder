@@ -3,6 +3,10 @@ import useWindowSize from "../hooks/useWindowSize.js";
 import { ImageInfo } from "../types.js";
 import ImageItem from "./ImageItem.js";
 import styles from "../styles/ImageRow.module.scss";
+import { motion } from "framer-motion";
+import Worker from 'worker-loader';
+import { workerPool, WorkerPool } from '../workers/WorkerPool'; // Update this import
+import { createImageProcessor } from '../workers/imageProcessor';
 
 // Define the props interface for the ImageRow component
 interface ImageRowProps {
@@ -13,6 +17,9 @@ interface ImageRowProps {
   isLastRow: boolean;
   rowHeight: number;
   groupedImages: { key: string; images: ImageInfo[]; isCarousel: boolean }[];
+  processedImages: { [key: string]: { low: string; high: string } };
+  workerPool: WorkerPool;
+  imageProcessor: ReturnType<typeof createImageProcessor>;
 }
 
 // Define the ImageRow component
@@ -24,6 +31,7 @@ const ImageRow: React.FC<ImageRowProps> = ({
   isLastRow,
   groupedImages,
   rowHeight,
+  imageProcessor,  // Add this line
 }) => {
   // Create a ref for the row div and a state for its width
   const rowRef = useRef<HTMLDivElement>(null);
@@ -51,55 +59,75 @@ const ImageRow: React.FC<ImageRowProps> = ({
   // Calculate the ideal row width
   const idealRowWidth = rowWidth * zoom;
 
-  let imageWidths: number[];
-
-  if (isLastRow && images.length === 1) {
-    // For the last row with only one image, set a maximum width
-    const maxWidth = idealRowWidth * 0.75; // 75% of the row width
-    imageWidths = [Math.min(maxWidth, idealRowWidth)];
-  } else {
-    // Original width distribution logic
-    let remainingWidth = idealRowWidth;
-    imageWidths = images.map((image, index) => {
-      const aspectRatio = image.width / image.height;
-      let width = (aspectRatio / totalAspectRatio) * idealRowWidth;
-
-      // Ensure the last image fills the remaining space
-      if (index === images.length - 1) {
-        width = remainingWidth;
-      } else {
-        remainingWidth -= width;
-      }
-
-      return Math.floor(width);
-    });
-  }
+  const imageWidths = images.map((image, index) => {
+    const aspectRatio = image.width / image.height;
+    return (aspectRatio / totalAspectRatio) * idealRowWidth;
+  });
 
   const containerHeight =
     isLastRow && images.length < columns
       ? (imageWidths[0] / images[0].width) * images[0].height
       : (imageWidths[0] / images[0].width) * images[0].height;
 
+  const rowVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const imageVariants = {
+    hidden: { opacity: 0, scale: 0.8 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      transition: {
+        type: 'spring',
+        damping: 15,
+        stiffness: 100,
+      },
+    },
+  };
+
   return (
-    <div ref={rowRef} className={styles.imageRow}>
+    <motion.div
+      ref={rowRef}
+      className={styles.imageRow}
+      variants={rowVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {images.map((image, index) => {
         const group = groupedImages.find(g => g.images.some(img => img.id === image.id));
         const groupCount = group ? group.images.length : 1;
 
         return (
-          <div key={image.id} className={styles.imageWrapper} style={{ width: imageWidths[index], height: containerHeight }}>
+          <motion.div
+            key={image.id}
+            className={styles.imageWrapper}
+            style={{ 
+              width: `${(imageWidths[index] / idealRowWidth) * 100}%`,
+              height: containerHeight,
+            }}
+          >
             <ImageItem
               image={image}
-              onClick={() => onImageClick(image, group ? group.images : [image])}
+              onClick={() =>
+                onImageClick(image, group ? group.images : [image])
+              }
               containerWidth={imageWidths[index]}
               containerHeight={containerHeight}
               zoom={zoom}
               groupCount={groupCount}
+              imageProcessor={imageProcessor}  // Add this line
             />
-          </div>
+          </motion.div>
         );
       })}
-    </div>
+    </motion.div>
   );
 };
 

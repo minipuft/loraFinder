@@ -1,0 +1,19 @@
+.currentDirectoryButton {
+  position: relative;
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.buttonBackground {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, #ff00ff, #00ffff);
+  z-index: -1;
+}

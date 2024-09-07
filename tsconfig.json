@@ -35,9 +35,10 @@
       "@/*": ["src/*"]
     },
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "sourceMap": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "ts-node": {
     "esm": true,

@@ -1,6 +1,7 @@
 import React from "react";
 import ImageFeed from "./ImageFeed.js";
 import { ImageInfo } from "../types.js";
+import styles from "../styles/ImageViewer.module.scss";
 
 // Define the props interface for the ImageViewer component
 interface ImageViewerProps {
@@ -24,9 +25,9 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
 
   return (
     // Main container with flex layout
-    <div className="flex flex-col h-full bg-background-dark">
+    <div className={`${styles.imageViewer} flex flex-col h-full`}>
       {/* Content container with scrolling */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className={`${styles.contentContainer} flex-1`}>
         {/* Conditional rendering based on error, loading, and image availability */}
         {error ? (
           // Display error message if there's an error

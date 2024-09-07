@@ -1,0 +1,16 @@
+.imageViewer {
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.contentContainer {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -15,3 +15,17 @@ export const PORT = 3000;
 
 // Host: Hostname or IP address on which the server will run
 export const HOST = 'localhost';
+
+// Custom properties for dynamic styling
+export const CUSTOM_PROPERTIES = {
+  SCROLL_Y: '--scroll-y',
+  MOUSE_X: '--mouse-x',
+  MOUSE_Y: '--mouse-y',
+};
+
+// Default values for custom properties
+export const DEFAULT_CUSTOM_PROPERTY_VALUES = {
+  [CUSTOM_PROPERTIES.SCROLL_Y]: '0px',
+  [CUSTOM_PROPERTIES.MOUSE_X]: '0px',
+  [CUSTOM_PROPERTIES.MOUSE_Y]: '0px',
+};

@@ -30,6 +30,7 @@ module.exports = {
           cyan: "#7dcfff",
           red: "#f7768e",
         },
+        transparent: 'transparent',
       },
       // Custom font stack for consistent typography across platforms
       fontFamily: {

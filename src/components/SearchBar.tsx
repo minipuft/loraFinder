@@ -1,5 +1,7 @@
-import React, { useState } from "react";
-import { IconSearch } from "@tabler/icons-react";
+import { motion, useAnimation } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { useDebounce } from 'use-debounce';
+import styles from '../styles/SearchBar.module.scss';
 
 // Define the props interface for the SearchBar component
 interface SearchBarProps {
@@ -9,7 +11,10 @@ interface SearchBarProps {
 // Define the SearchBar component
 const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
   // State to manage the search query
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
+  const [debouncedQuery] = useDebounce(query, 300);
+  const [suggestions, setSuggestions] = useState([]);
+  const controls = useAnimation();
 
   // Handler for form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -17,22 +22,56 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
     onSearch(query);
   };
 
+  // Fetch suggestions based on debouncedQuery
+  useEffect(() => {
+    if (debouncedQuery) {
+      // Update suggestions state
+    }
+  }, [debouncedQuery]);
+
   // Render the SearchBar component
   return (
-    <form onSubmit={handleSubmit} className="relative">
-      {/* Search input field */}
-      <input
+    <motion.form
+      onSubmit={handleSubmit}
+      className={styles.searchBarContainer}
+      initial={{ width: '200px' }}
+      animate={{ width: query ? '300px' : '200px' }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+    >
+      <motion.div
+        className={styles.searchBackground}
+        animate={{
+          background: query
+            ? 'linear-gradient(90deg, #4a00e0 0%, #8e2de2 100%)'
+            : 'rgba(255, 255, 255, 0.1)',
+        }}
+      />
+      <motion.input
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search Loras..."
-        className="w-64 py-1 pl-8 pr-2 text-sm text-gray-200 bg-gray-700 rounded-md focus:outline-none focus:bg-gray-600 focus:ring-1 focus:ring-primary"
+        className={styles.searchInput}
+        placeholder="Search the future..."
+        whileFocus={{ scale: 1.05 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
       />
-      {/* Search button with icon */}
-      <button type="submit" className="absolute left-0 top-0 mt-1 ml-2">
-        <IconSearch size={16} className="text-gray-300" />
-      </button>
-    </form>
+      {suggestions.length > 0 && (
+        <motion.ul
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={styles.suggestions}
+        >
+          {suggestions.map((suggestion, index) => (
+            <motion.li
+              key={index}
+              whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.1)' }}
+            >
+              {suggestion}
+            </motion.li>
+          ))}
+        </motion.ul>
+      )}
+    </motion.form>
   );
 };
 

@@ -1,6 +1,12 @@
 /* Main container for the image grid */
 .imageGrid {
-  @apply flex flex-col gap-4 w-full max-w-screen-2xl mx-auto px-4;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  transition: all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 
   @media (min-width: 2560px) {
     @apply px-6;
@@ -43,5 +49,68 @@
 /* Utility class for smooth transitions */
 .smoothTransition {
   @apply transition-all duration-300 ease-in-out;
+}
+
+/* Styles for the immersive image feed */
+.imageFeed {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  overflow: hidden;
+}
+
+.imageRow {
+  opacity: 0;
+  transform: translateY(20px) rotateX(-10deg);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+
+  &.visible {
+    opacity: 1;
+    transform: translateY(0) rotateX(0);
+  }
+}
+
+.imageWrapper {
+  position: relative;
+  transition: transform 0.5s ease-out;
+  transform: translateZ(0) rotateX(0);
+  opacity: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+
+  &.visible {
+    opacity: 1;
+    transform: translateZ(50px) rotateX(10deg);
+    clip-path: polygon(10% 10%, 90% 10%, 90% 90%, 10% 90%);
+  }
+}
+
+.image {
+  width: 100%;
+  height: auto;
+  transition: transform 0.3s ease-out;
+
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+.parallaxLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.masked-image-feed {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.image-feed {
+  position: relative;
+  overflow: hidden;
 }
 

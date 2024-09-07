@@ -1,3 +1,5 @@
+import { createImageProcessor } from '../workers/imageProcessor.js';
+
 export interface ImageInfo {
   id: string;
   src: string;
@@ -38,6 +40,7 @@ export interface ImageRowProps {
   zoom: number;
   isLastRow: boolean;
   rowHeight: number;
+  imageProcessor: ReturnType<typeof createImageProcessor>;
 }
 
 export interface LayoutProps {

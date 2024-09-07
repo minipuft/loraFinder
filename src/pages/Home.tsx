@@ -135,7 +135,7 @@ const Home: React.FC = () => {
         isLoading={isLoading}
         error={error}
         selectedFolder={selectedFolder}
-        onUploadComplete={handleUploadComplete}
+        // onUploadComplete={handleUploadComplete}
         isGrouped={isGrouped}
       />
     </Layout>

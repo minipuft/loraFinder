@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { ImageInfo } from "../types.js";
 import ImageSkeleton from "./ImageSkeleton.js";
 import Lightbox from "yet-another-react-lightbox";
@@ -13,6 +13,10 @@ import "yet-another-react-lightbox/plugins/thumbnails.css";
 import "yet-another-react-lightbox/plugins/captions.css";
 import "yet-another-react-lightbox/plugins/counter.css";
 import { truncateImageTitle } from "../utils/stringUtils.js";
+import { motion, useViewportScroll, useTransform } from 'framer-motion';
+// import Lottie from 'react-lottie';
+import { workerPool } from '../workers/WorkerPool.js';
+import { createImageProcessor } from '../workers/imageProcessor.js';
 
 // Define the props interface for ImageFeed component
 interface ImageFeedProps {
@@ -37,6 +41,12 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const [lightboxIndex, setLightboxIndex] = useState<number>(-1);
   const [columns, setColumns] = useState(4);
   const [lightboxImages, setLightboxImages] = useState<ImageInfo[]>([]);
+  const [rowTransforms, setRowTransforms] = useState<number[]>([]);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const { scrollY } = useViewportScroll();
+  const y1 = useTransform(scrollY, [0, 300], [0, 200]);
+  const y2 = useTransform(scrollY, [0, 300], [0, -200]);
+  const [processedImages, setProcessedImages] = useState<{ [key: string]: { low: string; high: string } }>({});
 
   // Group images by similar titles
   const groupedImages = useMemo(() => {
@@ -149,24 +159,132 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Render the image grid
+  // Effect hook to handle scroll events and update row transforms
+  useEffect(() => {
+    const handleScroll = () => {
+      const feed = feedRef.current;
+      if (!feed) return;
+
+      const scrollTop = feed.scrollTop;
+      const feedHeight = feed.clientHeight;
+      const scrollHeight = feed.scrollHeight;
+
+      const newRowTransforms = groupedRows.map((_, index) => {
+        const row = feed.querySelector(`.image-row:nth-child(${index + 1})`) as HTMLElement;
+        if (!row) return 0;
+
+        const rowTop = row.offsetTop;
+        const rowHeight = row.clientHeight;
+
+        const scrollPercentage = (scrollTop - rowTop) / (scrollHeight - feedHeight);
+        const transform = scrollPercentage * (feedHeight - rowHeight);
+
+        return transform;
+      });
+
+      setRowTransforms(newRowTransforms);
+    };
+
+    const feed = feedRef.current;
+    if (feed) {
+      feed.addEventListener("scroll", handleScroll);
+    }
+
+    return () => {
+      if (feed) {
+        feed.removeEventListener("scroll", handleScroll);
+      }
+    };
+  }, [groupedRows]);
+
+  // Effect hook to handle scroll events and update row transforms with 3D effects
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY;
+      const rows = feedRef.current?.querySelectorAll('.image-row');
+      
+      rows?.forEach((row, index) => {
+        const speed = 1 + (index % 3) * 0.1; // Vary speed for each row
+        const yOffset = scrollY * speed;
+        const rotation = Math.sin(scrollY * 0.002 + index) * 5; // Subtle rotation
+        
+        row.animate([
+          { 
+            transform: `translateY(${yOffset}px) rotateX(${rotation}deg) translateZ(${-index * 10}px)`,
+          }
+        ], {
+          duration: 1000,
+          fill: "forwards",
+          easing: "ease-out",
+        });
+      });
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Effect hook to handle scroll events and update row transforms with parallax effect
+  useEffect(() => {
+    const observerOptions = {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1,
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add(styles.visible);
+        } else {
+          entry.target.classList.remove(styles.visible);
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll(`.${styles.imageWrapper}`).forEach((img) => {
+      observer.observe(img);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    groupedImages.forEach(group => {
+      group.images.forEach(image => {
+        workerPool.processImage(image).then((processedImage: string) => {
+          setProcessedImages(prev => ({
+            ...prev,
+            [image.id]: { ...prev[image.id], low: processedImage }
+          }));
+        });
+      });
+    });
+  }, [groupedImages]);
+
+  const imageProcessor = useMemo(() => createImageProcessor(), []);
+
   return (
-    <div className={styles.imageGrid}>
-      {groupedRows.map((rowImages, rowIndex) => (
+    <div className="image-feed overflow-x-hidden" ref={feedRef} style={{ perspective: '1000px' }}>
+      <motion.div className={styles.parallaxLayer} style={{ y: y1 }}>
+        {/* Add some background elements for parallax effect */}
+      </motion.div>
+      {groupedRows.map((rowImages, index) => (
         <ImageRow
-          key={rowIndex}
+          key={index}
           images={rowImages}
           onImageClick={handleImageClick}
           columns={columns}
           zoom={zoom}
-          isLastRow={rowIndex === groupedRows.length - 1}
+          isLastRow={index === groupedRows.length - 1}
           rowHeight={200}
           groupedImages={groupedImages}
+          processedImages={processedImages}
+          workerPool={workerPool}
+          imageProcessor={imageProcessor}
         />
       ))}
-      {/* Show loading skeleton when images are being fetched */}
-      {isLoading && <ImageSkeleton />}
-      {/* Lightbox component for full-screen image viewing */}
+      {isLoading && <ImageSkeleton containerWidth={800} containerHeight={600} />}
       <Lightbox
         slides={lightboxImages.map((image) => ({
           src: image.src,
@@ -192,7 +310,18 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
           padding: 4,
           gap: 16,
         }}
+        animation={{
+          fade: 300,
+          swipe: 300,
+        }}
+        carousel={{
+          finite: true,
+          preload: 2,
+        }}
       />
+      <motion.div className={styles.parallaxLayer} style={{ y: y2 }}>
+        {/* Add some foreground elements for parallax effect */}
+      </motion.div>
     </div>
   );
 };

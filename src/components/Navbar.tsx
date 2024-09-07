@@ -1,7 +1,8 @@
-import React from 'react';
-import CurrentDirectoryButton from './CurrentDirectoryButton.js';
-import SearchBar from './SearchBar.js';
-import ZoomSlider from './ZoomSlider.js';
+import React, { useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import CurrentDirectoryButton from './CurrentDirectoryButton';
+import SearchBar from './SearchBar';
+import ZoomSlider from './ZoomSlider';
 import styles from '../styles/Navbar.module.scss';
 
 // Update the props interface for the Navbar component
@@ -23,9 +24,37 @@ const Navbar: React.FC<NavbarProps> = ({
   isGrouped,
   onGroupToggle,
 }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (svg) {
+      const animate = () => {
+        const path = svg.querySelector('path');
+        if (path) {
+          const length = path.getTotalLength();
+          path.style.strokeDasharray = `${length} ${length}`;
+          path.style.strokeDashoffset = `${length}`;
+          path.getBoundingClientRect();
+          path.style.transition = 'stroke-dashoffset 2s ease-in-out';
+          path.style.strokeDashoffset = '0';
+        }
+      };
+      animate();
+    }
+  }, []);
+
   // Render the Navbar component
   return (
-    <nav className={styles.navbar}>
+    <motion.div
+      className={styles.navbar}
+      initial={{ opacity: 0, y: -50 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <svg ref={svgRef} className={styles.navbarBackground}>
+        <path d="M0,0 Q50,20 100,10 T200,30 T300,5 T400,25 V100 Q350,80 300,90 T200,70 T100,95 T0,75 Z" />
+      </svg>
       {/* Left section of the navbar */}
       <div className={styles.leftSection}>
         {/* Display the current directory */}
@@ -36,13 +65,18 @@ const Navbar: React.FC<NavbarProps> = ({
       {/* Right section of the navbar */}
       <div className={styles.rightSection}>
         {/* Add this button */}
-        <button onClick={onGroupToggle} className={styles.viewToggleButton}>
+        <motion.button
+          onClick={onGroupToggle}
+          className={styles.viewToggleButton}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
           {isGrouped ? 'Ungroup' : 'Group'}
-        </button>
+        </motion.button>
         {/* Zoom control slider */}
         <ZoomSlider zoom={zoom} onZoomChange={onZoomChange} />
       </div>
-    </nav>
+    </motion.div>
   );
 };
 

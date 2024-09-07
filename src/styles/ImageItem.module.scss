@@ -1,55 +1,57 @@
 /* Styles for the individual image item container */
+/* Styles for the individual image item container */
 .imageItem {
-  @apply relative overflow-hidden cursor-pointer transition-opacity duration-300 ease-in-out;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease-out;
 
   &:hover {
-    @apply opacity-80;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
   }
 }
 
 /* Hover effect for the image item */
 .imageItem:hover {
-  opacity: 0.8;
+  .imageOverlay {
+    opacity: 1;
+  }
+
+  .image {
+    transform: scale(1.05);
+  }
 }
 
 /* Wrapper for the image to control overflow */
 .imageWrapper {
-  @apply relative overflow-hidden rounded-lg shadow-md transition-transform duration-300 ease-in-out;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  transition: clip-path 0.5s ease-out;
 
   &:hover {
-    @apply opacity-90 transform scale-105;
+    clip-path: polygon(10% 10%, 90% 10%, 90% 90%, 10% 90%);
   }
 }
 
 /* Styles for the image title overlay */
 .imageTitle {
-  @apply absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white p-2 text-center transform translate-y-full transition-transform duration-300 ease-in-out;
-
-  .imageWrapper:hover & {
-    @apply transform translate-y-0;
-  }
-}
-
-.imageTitle {
-  color: rgb(100, 99, 99);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-}
-
-.imageWrapper:hover .imageCounter {
-  opacity: 1;
 }
 
 .groupCounter {
   position: absolute;
   top: 8px;
   right: 8px;
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: rgba(0, 0, 0, 0.6);
   color: white;
   font-size: 12px;
   font-weight: bold;
   padding: 4px 8px;
   border-radius: 12px;
-  z-index: 10;
 }
 
 .imageWrapper:hover .groupCounter {
@@ -57,10 +59,13 @@
 }
 
 .image {
-  @apply w-full h-full object-cover transition-transform duration-300 ease-in-out;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease-out;
 
   &:hover {
-    @apply transform scale-105;
+    transform: scale(1.05);
   }
 }
 
@@ -69,9 +74,85 @@
 }
 
 .imageOverlay {
-  @apply absolute inset-0 flex flex-col justify-between p-2;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 100%);
+  display: flex;
+  align-items: flex-end;
+  padding: 16px;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
 }
 
 .imageWrapper:hover .imageOverlay {
   opacity: 1;
 }
+
+.imageItem {
+  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.imageTitle {
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  opacity: 0;
+  transform: translateY(100%);
+
+  .imageWrapper:hover & {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.imageWrapper {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  transition: clip-path 0.5s ease-out;
+
+  &.reveal {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+}
+
+@keyframes morphShape {
+  0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  50% { clip-path: polygon(10% 10%, 90% 10%, 90% 90%, 10% 90%); }
+  100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+
+.animatedImage {
+  animation: morphShape 5s infinite alternate;
+}
+
+.imageSkeleton {
+  background-color: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.skeletonAnimation {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
