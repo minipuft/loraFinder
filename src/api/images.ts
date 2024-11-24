@@ -2,14 +2,9 @@ import express from 'express'
 import fs from 'fs'
 import path from 'path'
 import { ImageInfo } from '../types.js'
-import sharp from 'sharp'
+import { isImageFile, getImageDimensions } from '../utils/imageUtils.js'
 
 const router = express.Router()
-
-function isImageFile(filename: string): boolean {
-  const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"]
-  return imageExtensions.includes(path.extname(filename).toLowerCase())
-}
 
 router.get('/images', async (req, res) => {
   const { folder } = req.query
@@ -27,23 +22,9 @@ router.get('/images', async (req, res) => {
   }
 })
 
-async function getImageDimensions(
-  filePath: string
-): Promise<{ width: number; height: number }> {
-  try {
-    const metadata = await sharp(filePath).metadata();
-    return { width: metadata.width || 0, height: metadata.height || 0 };
-  } catch (error) {
-    console.error("Error getting image dimensions:", error);
-    return { width: 0, height: 0 };
-  }
-}
-
 async function getImages(folder: string): Promise<ImageInfo[]> {
   const mainDirectory = process.env.MAIN_DIRECTORY || process.cwd()
   const imagesDirectory = path.join(mainDirectory, folder)
-
-  console.log("Attempting to access folder:", imagesDirectory)
 
   if (!fs.existsSync(imagesDirectory)) {
     throw new Error(`Folder not found: ${imagesDirectory}`)

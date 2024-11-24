@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ImageInfo } from "../types.js";
 import styles from "../styles/ImageItem.module.scss";
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver.js';
+import { truncateImageTitle } from '../utils/stringUtils.js';
 
 interface ImageItemProps {
   image: ImageInfo;
@@ -88,6 +89,14 @@ const ImageItem: React.FC<ImageItemProps> = ({
                 transition: { duration: 0.3 }
               }}
             />
+            <motion.div 
+              className={styles.imageTitle}
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              {truncateImageTitle(image.alt)}
+            </motion.div>
           </motion.div>
         ) : (
           <motion.div

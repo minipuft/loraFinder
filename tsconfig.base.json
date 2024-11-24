@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": false,
+    "jsx": "react-jsx",
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"],
+      "@shared/*": ["shared/*"],
+      "@client/*": ["client/*"],
+      "@server/*": ["server/*"]
+    },
+    "sourceMap": true,
+    "types": ["node", "webgl2", "jest", "vite/client"],
+    "typeRoots": ["./node_modules/@types", "./node_modules/vite/client"]
+  },
+  "include": [
+    "src/client/**/*",
+    "src/server/**/*",
+    "src/shared/**/*",
+    "src/server/server.tsx",
+    "src/client/index.html",
+    "src",
+    "src/shared/types"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "Prompts",
+    "Scripts",
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist/client",
+    "noEmit": false,
+    "sourceMap": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@client/*": ["client/*"],
+      "@shared/*": ["shared/*"],
+      "@server/*": ["server/*"],
+      "@/*": ["*"]
+    }
+  },
+  "include": ["src/client/**/*", "src/shared/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

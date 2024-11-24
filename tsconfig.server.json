@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "outDir": "./dist/server",
+    "noEmit": false,
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"],
+      "@server/*": ["server/*"],
+      "@shared/*": ["shared/*"],
+      "@client/*": ["client/*"]
+    },
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src/server/**/*", "src/shared/**/*", "src/client/**/*", "src/vite-env.d.ts"],
+  "exclude": ["node_modules"],
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  }
+}

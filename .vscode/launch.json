@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Client",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/src/client",
+      "sourceMaps": true
+    },
+    {
+      "name": "Debug Server",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/server/server.tsx",
+      "preLaunchTask": "tsc: build - tsconfig.server.json",
+      "outFiles": ["${workspaceFolder}/dist/server/**/*.js"],
+      "sourceMaps": true
+    }
+  ]
+}

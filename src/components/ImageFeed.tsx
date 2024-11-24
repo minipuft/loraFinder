@@ -15,7 +15,6 @@ import "yet-another-react-lightbox/plugins/counter.css";
 import { truncateImageTitle } from "../utils/stringUtils.js";
 import { motion, useViewportScroll, useTransform } from 'framer-motion';
 // import Lottie from 'react-lottie';
-import { workerPool } from '../workers/WorkerPool.js';
 import { createImageProcessor } from '../workers/imageProcessor.js';
 
 // Define the props interface for ImageFeed component
@@ -34,10 +33,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   zoom,
 }) => {
   // State for managing displayed images, pagination, lightbox, and columns
-  const [displayedImages, setDisplayedImages] = useState<ImageInfo[]>(
-    images.slice(0, 20)
-  );
-  const [hasMore, setHasMore] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number>(-1);
   const [columns, setColumns] = useState(4);
   const [lightboxImages, setLightboxImages] = useState<ImageInfo[]>([]);
@@ -51,20 +46,24 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   // Group images by similar titles
   const groupedImages = useMemo(() => {
     if (!isGrouped) {
-      return images.map((image) => ({
-        key: image.id,
-        images: [image],
-        isCarousel: false,
-      }));
+      return images
+        .filter(image => image && image.width && image.height)
+        .map((image) => ({
+          key: image.id,
+          images: [image],
+          isCarousel: false,
+        }));
     }
     const groups: { [key: string]: ImageInfo[] } = {};
-    images.forEach((image) => {
-      const processedTitle = truncateImageTitle(image.alt);
-      if (!groups[processedTitle]) {
-        groups[processedTitle] = [];
-      }
-      groups[processedTitle].push(image);
-    });
+    images
+      .filter(image => image && image.width && image.height)
+      .forEach((image) => {
+        const processedTitle = truncateImageTitle(image.alt);
+        if (!groups[processedTitle]) {
+          groups[processedTitle] = [];
+        }
+        groups[processedTitle].push(image);
+      });
     return Object.entries(groups).map(([key, group]) => ({
       key,
       images: group,
@@ -72,29 +71,51 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     }));
   }, [images, isGrouped]);
 
-  // Calculate rows with grouped images
+  // Modified groupedRows calculation
   const groupedRows = useMemo(() => {
     const rows: ImageInfo[][] = [];
+    const targetAspectRatio = columns * 0.75;
+    const minImagesPerRow = Math.max(1, Math.floor(columns / 2));
     let currentRow: ImageInfo[] = [];
     let currentAspectRatio = 0;
 
-    groupedImages.forEach((group) => {
-      const representativeImage = group.images[0];
-      const aspectRatio =
-        representativeImage.width / representativeImage.height;
+    // Cache aspect ratios for quick lookup
+    const aspectRatioCache = new Map();
+    
+    const getAspectRatio = (image: ImageInfo) => {
+      if (!aspectRatioCache.has(image.id)) {
+        aspectRatioCache.set(image.id, image.width / image.height);
+      }
+      return aspectRatioCache.get(image.id);
+    };
 
-      if (currentAspectRatio + aspectRatio > columns && currentRow.length > 0) {
+    const pushCurrentRow = () => {
+      if (currentRow.length > 0) {
         rows.push(currentRow);
         currentRow = [];
         currentAspectRatio = 0;
       }
+    };
 
-      currentRow.push(representativeImage);
+    for (let i = 0; i < groupedImages.length; i++) {
+      const group = groupedImages[i];
+      const image = group.images[0];
+      const aspectRatio = getAspectRatio(image);
+
+      if (
+        (currentAspectRatio + aspectRatio > targetAspectRatio && 
+         currentRow.length >= minImagesPerRow) ||
+        currentRow.length >= columns
+      ) {
+        pushCurrentRow();
+      }
+
+      currentRow = [...currentRow, image];
       currentAspectRatio += aspectRatio;
-    });
 
-    if (currentRow.length > 0) {
-      rows.push(currentRow);
+      if (i === groupedImages.length - 1) {
+        pushCurrentRow();
+      }
     }
 
     return rows;
@@ -114,18 +135,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     },
     [groupedImages]
   );
-
-  // Callback function to load more images
-  const loadMore = useCallback(() => {
-    const newImages = images.slice(
-      displayedImages.length,
-      displayedImages.length + 20
-    );
-    setDisplayedImages((prevImages) => [...prevImages, ...newImages]);
-    if (displayedImages.length + newImages.length >= images.length) {
-      setHasMore(false);
-    }
-  }, [images, displayedImages]);
 
   // Callback function to get the correct image URL
   const getImageUrl = useCallback((imagePath: string) => {
@@ -159,44 +168,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Effect hook to handle scroll events and update row transforms
-  useEffect(() => {
-    const handleScroll = () => {
-      const feed = feedRef.current;
-      if (!feed) return;
-
-      const scrollTop = feed.scrollTop;
-      const feedHeight = feed.clientHeight;
-      const scrollHeight = feed.scrollHeight;
-
-      const newRowTransforms = groupedRows.map((_, index) => {
-        const row = feed.querySelector(`.image-row:nth-child(${index + 1})`) as HTMLElement;
-        if (!row) return 0;
-
-        const rowTop = row.offsetTop;
-        const rowHeight = row.clientHeight;
-
-        const scrollPercentage = (scrollTop - rowTop) / (scrollHeight - feedHeight);
-        const transform = scrollPercentage * (feedHeight - rowHeight);
-
-        return transform;
-      });
-
-      setRowTransforms(newRowTransforms);
-    };
-
-    const feed = feedRef.current;
-    if (feed) {
-      feed.addEventListener("scroll", handleScroll);
-    }
-
-    return () => {
-      if (feed) {
-        feed.removeEventListener("scroll", handleScroll);
-      }
-    };
-  }, [groupedRows]);
-
   // Effect hook to handle scroll events and update row transforms with 3D effects
   useEffect(() => {
     const handleScroll = () => {
@@ -204,63 +175,32 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       const rows = feedRef.current?.querySelectorAll('.image-row');
       
       rows?.forEach((row, index) => {
-        const speed = 1 + (index % 3) * 0.1; // Vary speed for each row
-        const yOffset = scrollY * speed;
-        const rotation = Math.sin(scrollY * 0.002 + index) * 5; // Subtle rotation
+        // Only apply transforms if the row is in view
+        const rect = row.getBoundingClientRect();
+        const isInView = rect.top < window.innerHeight && rect.bottom > 0;
         
-        row.animate([
-          { 
-            transform: `translateY(${yOffset}px) rotateX(${rotation}deg) translateZ(${-index * 10}px)`,
-          }
-        ], {
-          duration: 1000,
-          fill: "forwards",
-          easing: "ease-out",
-        });
+        if (isInView) {
+          const speed = 1 + (index % 3) * 0.1;
+          const yOffset = scrollY * speed;
+          const rotation = Math.sin(scrollY * 0.002 + index) * 5;
+          
+          row.animate([
+            { 
+              transform: `translateY(${yOffset}px) rotateX(${rotation}deg) translateZ(${-index * 10}px)`,
+              opacity: 1
+            }
+          ], {
+            duration: 1000,
+            fill: "forwards",
+            easing: "ease-out",
+          });
+        }
       });
     };
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  // Effect hook to handle scroll events and update row transforms with parallax effect
-  useEffect(() => {
-    const observerOptions = {
-      root: null,
-      rootMargin: '0px',
-      threshold: 0.1,
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add(styles.visible);
-        } else {
-          entry.target.classList.remove(styles.visible);
-        }
-      });
-    }, observerOptions);
-
-    document.querySelectorAll(`.${styles.imageWrapper}`).forEach((img) => {
-      observer.observe(img);
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    groupedImages.forEach(group => {
-      group.images.forEach(image => {
-        workerPool.processImage(image).then((processedImage: string) => {
-          setProcessedImages(prev => ({
-            ...prev,
-            [image.id]: { ...prev[image.id], low: processedImage }
-          }));
-        });
-      });
-    });
-  }, [groupedImages]);
 
   const imageProcessor = useMemo(() => createImageProcessor(), []);
 
@@ -269,9 +209,10 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       <motion.div className={styles.parallaxLayer} style={{ y: y1 }}>
         {/* Add some background elements for parallax effect */}
       </motion.div>
+      
       {groupedRows.map((rowImages, index) => (
         <ImageRow
-          key={index}
+          key={`row-${index}-${rowImages.map(img => img.id).join('-')}`} // Improved key
           images={rowImages}
           onImageClick={handleImageClick}
           columns={columns}
@@ -280,11 +221,12 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
           rowHeight={200}
           groupedImages={groupedImages}
           processedImages={processedImages}
-          workerPool={workerPool}
           imageProcessor={imageProcessor}
         />
       ))}
+
       {isLoading && <ImageSkeleton containerWidth={800} containerHeight={600} />}
+      
       <Lightbox
         slides={lightboxImages.map((image) => ({
           src: image.src,
@@ -293,7 +235,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
           description: `Image ${image.id}`,
         }))}
         open={lightboxIndex >= 0}
-        index={lightboxIndex}
+        index={lightboxIndex-(lightboxIndex)}
         close={() => setLightboxIndex(-1)}
         plugins={[
           Captions,
@@ -319,6 +261,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
           preload: 2,
         }}
       />
+      
       <motion.div className={styles.parallaxLayer} style={{ y: y2 }}>
         {/* Add some foreground elements for parallax effect */}
       </motion.div>

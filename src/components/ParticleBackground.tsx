@@ -10,7 +10,7 @@ const ParticleBackground: React.FC = () => {
 
     const particle = document.createElement('div');
     particle.classList.add(styles.particle);
-    
+
     const size = Math.random() * 20 + 5;
     const hue = Math.random() * 360;
     const x = Math.random() * 100;
@@ -20,13 +20,14 @@ const ParticleBackground: React.FC = () => {
     particle.style.cssText = `
       width: ${size}px;
       height: ${size}px;
-      background: hsla(${hue}, 70%, 70%, 0.2);
+      background: hsla(${hue}, 70%, 70%, 0.6);
       left: ${x}%;
       top: ${y}%;
       filter: blur(${blur}px);
       transform: translate(0, 0) scale(1);
       opacity: 1;
       transition: transform 10s ease-out, opacity 10s ease-out;
+      z-index: 1;
     `;
 
     container.appendChild(particle);

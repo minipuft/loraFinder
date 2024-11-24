@@ -1,5 +1,15 @@
 import path from "path";
+import sharp from "sharp";
 import { ImageInfo } from "@/types.js";
+
+// Section: Supported Formats
+export const SUPPORTED_FORMATS = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp'
+} as const;
 
 // Section: Content Type Determination
 /**
@@ -10,17 +20,8 @@ import { ImageInfo } from "@/types.js";
  * @returns {string} The corresponding content type.
  */
 export function getContentType(extension: string): string {
-  switch (extension.toLowerCase()) {
-    case ".jpg":
-    case ".jpeg":
-      return "image/jpeg";
-    case ".png":
-      return "image/png";
-    case ".gif":
-      return "image/gif";
-    default:
-      return "application/octet-stream";
-  }
+  const ext = extension.toLowerCase();
+  return SUPPORTED_FORMATS[ext as keyof typeof SUPPORTED_FORMATS] || 'application/octet-stream';
 }
 
 // Section: Image File Validation
@@ -32,7 +33,32 @@ export function getContentType(extension: string): string {
  * @returns {boolean} True if the file is an image, false otherwise.
  */
 export function isImageFile(filename: string): boolean {
-  return /\.(jpg|jpeg|png|gif)$/i.test(filename);
+  const ext = path.extname(filename).toLowerCase();
+  return ext in SUPPORTED_FORMATS;
+}
+
+// Section: Image Dimensions
+/**
+ * Gets the dimensions of an image based on its file path.
+ * This function uses the Sharp library to read the image metadata.
+ *
+ * @param {string} filePath - The full path of the image file.
+ * @returns {Promise<{ width: number; height: number }>} The dimensions of the image.
+ */
+export async function getImageDimensions(
+  filePath: string
+): Promise<{ width: number; height: number }> {
+  try {
+    const metadata = await sharp(filePath).metadata();
+    if (metadata.width && metadata.height) {
+      return { width: metadata.width, height: metadata.height };
+    }
+  } catch (error) {
+    console.log(`Sharp failed for ${filePath}:`, error);
+  }
+  
+  // Return default dimensions as fallback
+  return { width: 800, height: 600 };
 }
 
 // Section: Image Title Extraction

@@ -1,0 +1,54 @@
+
+Frontend Overview:
+This project implements a React-based frontend for managing and displaying images and folders. The frontend is designed to work with a Node.js backend and supports server-side rendering (SSR).
+
+Key Components:
+
+1. Layout (src/components/Layout.tsx):
+   - Main layout component that structures the application
+   - Integrates Sidebar, Navbar, and MainContent components
+   - Manages global state for selected folder, search query, and UI settings
+   - Implements custom hooks for API queries and custom properties
+
+2. MainContent (src/components/MainContent.tsx):
+   - Renders the primary content area of the application
+   - Utilizes ImageViewer component to display images
+   - Implements search functionality and filtering of images
+   - Uses React Query for efficient data fetching
+
+3. ImageViewer (src/components/ImageViewer.tsx):
+   - Handles the display of images, loading states, and error messages
+   - Renders ImageFeed component when images are available
+
+4. ImageFeed (src/components/ImageFeed.tsx):
+   - Manages the display of images in a grid layout
+   - Implements image processing and lazy loading
+   - Utilizes Web Workers for performance optimization
+   - Integrates with Lightbox for image viewing
+
+5. ImageItem (src/components/ImageItem.tsx):
+   - Individual image component with lazy loading and animations
+   - Uses Intersection Observer for efficient rendering
+   - Implements image processing using Web Workers
+
+6. Sidebar (src/components/Sidebar.tsx):
+   - Displays folder navigation and selection
+   - Implements folder fetching using React Query
+   - Uses Framer Motion for animations
+
+7. Navbar (not shown in provided snippets):
+   - Provides search functionality and UI controls
+
+State Management and Data Fetching:
+- React Query for efficient data fetching and caching (useImagesQuery, useFoldersQuery)
+- Custom hooks for API queries (useApiQueries.ts)
+- Local state management using useState for UI controls
+
+Performance Optimizations:
+- Web Workers for parallel image processing
+- Intersection Observer for lazy loading images
+- Framer Motion for smooth animations and transitions
+- Memoization of filtered images in MainContent
+
+Styling:
+- SCSS modules for component-specific styles

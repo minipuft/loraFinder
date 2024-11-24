@@ -2,13 +2,13 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import path from "path";
-import foldersRouter from "./api/folders.js";
-import imageRouter from "./api/image.js";
-import imagesRouter from "./api/images.js";
-import imageParamsRouter from "./api/image/[...params].js";
-import searchRouter from "./api/search.js";
-import uploadRouter from "./api/upload.js";
-import getCurrentDirectoryRouter from "./api/getCurrentDirectory.js";
+import foldersRouter from "./src/api/folders.js";
+import imageRouter from "./src/api/image.js";
+import imagesRouter from "./src/api/images.js";
+import imageParamsRouter from "./src/api/image/[...params].js";
+import searchRouter from "./src/api/search.js";
+import uploadRouter from "./src/api/upload.js";
+import getCurrentDirectoryRouter from "./src/api/getCurrentDirectory.js";
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
@@ -52,7 +52,7 @@ async function startServer() {
             const url = req.originalUrl;
             try {
                 // 1. Read index.html
-                let template = fs.readFileSync(path.resolve(__dirname, '..', 'index.html'), "utf-8");
+                let template = fs.readFileSync(path.resolve(__dirname, 'index.html'), "utf-8");
                 // 2. Apply Vite HTML transforms
                 template = await vite.transformIndexHtml(url, template);
                 // 3. Load the server entry
