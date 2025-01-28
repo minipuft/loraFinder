@@ -1,40 +1,76 @@
 # LoraFinder
 
-LoraFinder is a web application for managing and viewing image files, with a focus on LORA (Low-Rank Adaptation) models or related content.
+LoraFinder is a web application for managing and viewing image files, with a focus on LORA (Low-Rank Adaptation) models and related content. Built with Vite, Express, and React, it provides a robust platform for image management and viewing.
 
 ## Features
 
-- Browse images stored in different folders
-- Upload new images to specific folders
-- Search functionality across all images
-- Zoom control for image viewing
-- Responsive design
+- 🖼️ Advanced image management and viewing capabilities
+- 📁 Hierarchical folder navigation and management
+- 🔍 Full-text search across all images and folders
+- 🎨 Responsive masonry grid layout
+- 🔄 Real-time image processing with Sharp
+- 📱 Mobile-friendly responsive design
+- ⚡ Fast image loading with lazy loading and caching
+- 🎯 Cursor-based pagination for efficient data loading
+- 🔒 Secure file handling and validation
 
 ## Tech Stack
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- Axios for API calls
+### Frontend
+- React 18 with TypeScript
+- Vite for development and building
+- SCSS Modules + Tailwind CSS for styling
+- Framer Motion for animations
+- React Query for data fetching
+- Zustand for state management (planned)
+
+### Backend
+- Express.js server
+- Sharp for image processing
+- Node Cache for server-side caching
+- TypeScript for type safety
+- Socket.io for real-time features (planned)
+
+## Prerequisites
+
+- Node.js >= 18.0.0
+- npm >= 9.0.0
+- Git
 
 ## Getting Started
 
-1. Clone the repository
-2. Install dependencies:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/lorafinder.git
+   cd lorafinder
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
    ```
-3. Set up environment variables:
-   Create a `.env.local` file in the root directory and add:
-   ```bash
+
+3. **Set up environment variables**
+   Create a `.env` file in the root directory:
+   ```env
+   VITE_PORT=3001
+   VITE_HOST=localhost
    MAIN_DIRECTORY=/path/to/your/image/directory
    ```
-4. Run the development server:
+
+4. **Development**
    ```bash
    npm run dev
    ```
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
+   This will start:
+   - Client at http://localhost:5173
+   - Server at http://localhost:3001
+
+5. **Production Build**
+   ```bash
+   npm run build
+   npm start
+   ```
 
 ## Project Structure
 

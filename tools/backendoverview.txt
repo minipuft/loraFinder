@@ -1,0 +1,207 @@
+Backend Overview:
+This project implements a custom Express server integrated with Next.js, providing robust API endpoints for image and folder management. The backend follows a modular architecture with TypeScript for type safety.
+
+Server Architecture (/src/server/server.ts):
+- Custom Express server with Next.js integration
+- Environment configuration via dotenv
+- Production-ready CORS configuration:
+  - Configurable allowed origins
+  - Methods: GET, POST, PUT, DELETE, OPTIONS
+  - Custom headers and exposed headers
+  - 24-hour cache age
+- Global middleware:
+  - JSON body parsing (50mb limit)
+  - URL-encoded parsing (50mb limit)
+  - Static file serving with caching:
+    - Max age: 1 day
+    - ETag support
+    - Last-Modified headers
+- Development features:
+  - Hot module replacement
+  - Webpack HMR proxy
+  - Development CORS settings
+
+API Implementation (/src/lib/api):
+
+1. Core API Setup (api.ts):
+   - Axios instance with default configuration
+   - Request/Response interceptors
+   - Debugging and logging
+   - Error handling
+   - Type-safe responses
+   - 30-second timeout
+
+2. Image Management:
+   
+   images.ts:
+   - GET /api/images
+     - Query parameters:
+       - folder: Directory path
+       - limit: Pagination size
+       - cursor: Pagination token
+       - sortBy: 'date' | 'name'
+     - Response: ImagesResponse with pagination
+   - Implements efficient file system operations
+   - Supports image format filtering
+   - Error handling with detailed messages
+   
+   image.ts:
+   - GET /api/image/[id]
+     - Streaming support
+     - Range requests
+     - Content-Type detection
+     - Caching headers
+   - DELETE /api/image/[id]
+   - PATCH /api/image/[id]
+   - Error handling for missing files
+   
+   upload.ts:
+   - POST /api/upload
+     - Multipart form handling
+     - Progress tracking
+     - Concurrent uploads
+     - File validation
+   - Configurable upload limits
+   - Automatic directory creation
+   - Thumbnail generation
+
+3. Folder Management:
+   
+   folders.ts:
+   - GET /api/folders
+     - Directory tree structure
+     - File counts
+     - Size calculations
+   - POST /api/folders
+   - DELETE /api/folders
+   - Security checks
+   
+   getCurrentDirectory.ts:
+   - GET /api/getCurrentDirectory
+   - Path normalization
+   - Security validation
+
+4. Search Functionality:
+   
+   search.ts:
+   - GET /api/search
+     - Query parameters:
+       - query: Search term
+       - folder: Scope
+       - limit: Results per page
+     - Fuzzy matching
+     - Metadata search
+     - Performance optimization
+
+5. Query Integration:
+   
+   API Response Structure:
+   - Consistent pagination format:
+     ```typescript
+     interface PaginatedResponse<T> {
+       items: T[];
+       hasMore: boolean;
+       nextCursor?: string;
+     }
+     ```
+   - Type-safe error responses:
+     ```typescript
+     interface ErrorResponse {
+       success: false;
+       error: string;
+       details?: any;
+     }
+     ```
+   
+   Cache Optimization:
+   - ETag support for query caching
+   - Last-Modified headers
+   - Cache-Control directives
+   - Conditional GET support
+   
+   Query Parameters:
+   - Standardized parameter handling:
+     - folderId: Directory filtering
+     - groupBy: 'date' | 'none'
+     - sortBy: 'name' | 'date'
+     - limit: Pagination size
+     - cursor: Pagination token
+   
+   Performance Features:
+   - Cursor-based pagination
+   - Efficient query invalidation
+   - Optimistic updates
+   - Background data synchronization
+   - Request deduplication (3s window)
+
+Shared Resources (/src/shared):
+
+1. Types:
+   api.ts:
+   - Request/Response interfaces
+   - API-specific types
+   - Validation schemas
+   
+   index.ts:
+   - Common type definitions
+   - Type transformations
+   - Utility types
+
+2. Configuration:
+   env.ts:
+   - Environment validation
+   - Type-safe config
+   - Default values
+   
+   constants.ts:
+   - API endpoints
+   - Cache settings
+   - Upload limits
+
+3. Utilities:
+   - Path manipulation
+   - File operations
+   - Error handling
+   - Type guards
+
+Security Features:
+- Path traversal prevention
+- File type validation
+- Size limits
+- CORS configuration
+- Error message sanitization
+- Input validation
+- Rate limiting (configurable)
+
+Performance Optimizations:
+- Response caching
+- ETag support
+- Range requests
+- Streaming responses
+- Connection pooling
+- Request debouncing
+- Efficient file operations
+
+Error Handling:
+- Consistent error format:
+  {
+    success: false,
+    error: string,
+    details?: any
+  }
+- HTTP status codes:
+  - 400: Bad Request
+  - 401: Unauthorized
+  - 403: Forbidden
+  - 404: Not Found
+  - 413: Payload Too Large
+  - 429: Too Many Requests
+  - 500: Server Error
+
+Development Tools:
+- TypeScript with strict mode
+- Environment validation
+- Request logging
+- Error tracking
+- Hot reloading
+- Development proxies

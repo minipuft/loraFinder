@@ -30,7 +30,7 @@ async function startServer() {
     console.log("Current working directory:", process.cwd());
 
     const app = express();
-    const port = process.env.VITE_PORT || 3000;
+    const port = process.env.VITE_PORT || 3001;
 
     // API routes
     app.use("/api", foldersRouter);
@@ -49,7 +49,7 @@ async function startServer() {
       server: { 
         middlewareMode: true,
         host: process.env.VITE_HOST,
-        port: parseInt(process.env.VITE_PORT || '3000', 10)
+        port: parseInt(process.env.VITE_PORT || '3001', 10)
       },
       appType: 'custom'
     });

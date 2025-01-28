@@ -16,9 +16,9 @@ export default defineConfig({
     },
   },
   server: {
-    proxy: {
-      '/api': 'http://localhost:3000'
-    }
+    middlewareMode: true,
+    host: process.env.VITE_HOST,
+    port: parseInt(process.env.VITE_PORT || '3001', 10)
   },
   resolve: {
     alias: {

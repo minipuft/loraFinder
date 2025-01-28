@@ -1,4 +1,9 @@
-import { NextApiResponse } from 'next';
+import type { Response } from 'express';
+
+interface HttpError extends Error {
+  statusCode: number;
+  code?: string;
+}
 
 /**
  * Error Handling Module
@@ -8,50 +13,58 @@ import { NextApiResponse } from 'next';
 /**
  * Handles API errors and sends an appropriate response.
  * This function logs the error and sends a JSON response with error details.
- * 
- * @param {NextApiResponse} res - The response object to send the error.
- * @param {unknown} error - The error that occurred.
- * @param {string} defaultMessage - A default message to use if the error is not an instance of Error.
+ *
+ * @param {Response} res - The Express response object
+ * @param {unknown} error - The error that occurred
+ * @param {string} defaultMessage - A default message to use if the error is not an instance of Error
  */
-export function handleApiError(res: NextApiResponse, error: unknown, defaultMessage: string) {
-  console.error(defaultMessage, error);
-  
-  if (error instanceof Error) {
-    res.status(500).json({ error: defaultMessage, details: error.message });
-  } else {
-    res.status(500).json({ error: defaultMessage, details: 'An unknown error occurred' });
-  }
+export function handleApiError(
+  res: Response,
+  error: unknown,
+  defaultMessage: string
+) {
+  logError('API Error', { error, message: defaultMessage });
+
+  const statusCode = isHttpError(error) ? error.statusCode : 500;
+  const errorMessage = error instanceof Error ? error.message : defaultMessage;
+
+  res.status(statusCode).json({
+    success: false,
+    error: defaultMessage,
+    details: errorMessage,
+    code: isHttpError(error) ? error.code : undefined
+  });
 }
 
 /**
- * Creates a custom error with a specific status code.
- * This function is useful for creating HTTP-specific errors.
- * 
- * @param {string} message - The error message.
- * @param {number} statusCode - The HTTP status code for the error.
- * @returns {Error & { statusCode: number }} A custom error object with a status code.
+ * Creates a custom error with a specific status code and optional error code.
+ *
+ * @param {string} message - The error message
+ * @param {number} statusCode - The HTTP status code for the error
+ * @param {string} [code] - Optional error code for client-side handling
  */
-export function createHttpError(message: string, statusCode: number): Error & { statusCode: number } {
-  const error = new Error(message) as Error & { statusCode: number };
+export function createHttpError(
+  message: string,
+  statusCode: number,
+  code?: string
+): HttpError {
+  const error = new Error(message) as HttpError;
   error.statusCode = statusCode;
+  if (code) error.code = code;
   return error;
 }
 
 /**
- * Checks if an error has a status code property.
- * This function is a type guard for HTTP errors.
- * 
- * @param {unknown} error - The error to check.
- * @returns {boolean} True if the error has a statusCode property, false otherwise.
+ * Type guard for HTTP errors
  */
-export function isHttpError(error: unknown): error is Error & { statusCode: number } {
+export function isHttpError(error: unknown): error is HttpError {
   return error instanceof Error && 'statusCode' in error;
 }
 
 /**
  * Logs an error with additional context information.
  * This function provides detailed error logging, including stack traces when available.
- * 
+ *
  * @param {string} context - The context in which the error occurred.
  * @param {unknown} error - The error that occurred.
  */

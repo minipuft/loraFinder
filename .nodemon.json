@@ -1,0 +1,20 @@
+{
+  "watch": ["src/server"],
+  "ignore": [
+    "node_modules",
+    "dist",
+    "build",
+    "vite.config.*",
+    "*.timestamp-*",
+    "*.mjs",
+    "postcss.config.cjs",
+    "tailwind.config.js",
+    "src/client",
+    "**/*.scss",
+    "**/*.css",
+    ".next",
+    "out",
+    "*.tsbuildinfo"
+  ],
+  "exec": "tsx watch --clear-screen=false server.ts"
+} 

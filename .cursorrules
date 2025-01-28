@@ -1,0 +1,293 @@
+### 1\. **Project Requirements**
+
+#### 1.1 **Configuration**
+
+<details> <summary><strong>Vite</strong></summary>
+
+*   **Rules**
+    *   Document build configurations
+    *   Update client/server configs
+    *   Note middleware changes
+    *   Record optimizations
+    *   Document SSR implementation
+
+</details> <details> <summary><strong>Tailwind</strong></summary>
+
+*   **Rules**
+    *   Document new utilities
+    *   Update color schemes
+    *   Note plugin changes
+    *   Record responsive breakpoints
+
+</details> <details> <summary><strong>TypeScript</strong></summary>
+
+*   **Rules**
+    *   Update path aliases
+    *   Note compiler options
+    *   Record type definitions
+    *   Document SSR types
+
+</details>
+
+* * *
+
+#### 1.2 **Express API**
+
+*   **Rules**
+    *   Document API endpoints
+    *   Update middleware stack
+    *   Note security changes
+    *   Record CORS settings
+    *   Document static file serving
+    *   Update SSR implementation
+
+* * *
+
+#### 1.3 **React 18**
+
+*   **Rules**
+    *   Document component lifecycle
+    *   Update state management
+    *   Note SSR hydration
+    *   Record performance optimizations
+
+* * *
+
+#### 1.4 **IDB Cache**
+
+*   File paths:
+    *   `src\lib\cache\providers\indexedDB.ts`
+    *   `src\lib\cache\providers\memory.ts`
+
+* * *
+
+#### 1.5 **Workers**
+
+*   File paths:
+    
+    *   `src\shared\workers\imageWorker.worker.ts`
+    *   `src\shared\workers\workerPool.ts`
+
+* * *
+
+#### 1.6 **SCSS**
+
+*   **Path:** `src/styles/`
+*   **Rules**
+    *   Create `{ComponentName}.module.scss` for each component
+    *   Record new Tailwind utilities
+    *   Update SCSS module changes
+    *   Document variables/themes
+    *   Note responsive behavior
+    *   Update animations
+
+* * *
+
+### 2\. **Data Flow**
+
+<details> <summary><strong>Client-Server Flow</strong></summary>
+
+```mermaid
+graph LR
+    A[React Component] -->|1. Action| B[API Client]
+    B -->|2. Request| C[Express Server]
+    C -->|3. Process| D[File System]
+    D -->|4. Response| C
+    C -->|5. Data| B
+    B -->|6. Update| A
+```
+
+</details>
+
+### 3\. **Development Guidelines**
+
+1. **Version Compatibility**
+   * Vite 5.x
+   * React 18.x
+   * Node.js >= 18.0.0
+   * TypeScript 5.x
+   * Express 4.x
+
+2. **File Structure**
+   * Follow existing patterns in `src/` directory
+   * Keep components modular
+   * Maintain SSR compatibility
+
+3. **Documentation**
+   * Update README.md
+   * Document API endpoints
+   * Maintain TypeScript types
+   * Comment complex logic
+
+4. **Security**
+   * Use environment variables
+   * Implement proper validation
+   * Follow security best practices
+   * Handle errors appropriately
+
+5. **Testing**
+   * Write unit tests
+   * Test SSR functionality
+   * Verify API endpoints
+   * Check error handling
+
+* * *
+
+### 4\. **Update Triggers**
+
+*   **New feature addition**
+*   **Bug fix implementation**
+*   **Performance optimization**
+*   **Security update**
+*   **Dependency change**
+
+* * *
+
+### 5\. **Quality**
+
+#### 5.1 **Validation**
+
+*   File paths exist
+*   Links are valid
+*   Types are current
+*   Examples work
+*   Formatting is consistent
+
+#### 5.2 **Verification**
+
+*   Technical accuracy
+*   Completeness
+*   Clarity
+*   Consistency
+*   Up-to-date status
+
+* * *
+
+### 6\. **Emergency**
+
+#### 6.1 **Critical Changes**
+
+*   Security patches
+*   Breaking changes
+*   API modifications
+*   Data structure changes
+*   Performance-critical updates
+
+#### 6.2 **Hotfix**
+
+*   Immediate impact
+*   Temporary measures
+*   Migration steps
+*   Rollback procedures
+*   Timeline for permanent fix
+
+* * *
+
+### 7\. **Data Flow Diagrams**
+
+<details> <summary><strong>Frontend-to-Backend Data Flow</strong></summary>
+
+```css
+A[React Component] -->|1. Triggers| B[useQuery Hook]
+B -->|2. Calls| C[lib/api/images.ts]
+C -->|3. Fetch Request| D[Express Server]
+D -->|4. Routes to| E[routes/images.ts]
+E -->|5. Reads| F[Your Local Files]
+```
+
+</details> <details> <summary><strong>Backend-to-Frontend Data Response</strong></summary>
+
+```css
+A[Your Files] -->|1. File Info| B[routes/images.ts]
+B -->|2. JSON Response| C[Express Server]
+C -->|3. HTTP Response| D[lib/api/images.ts]
+D -->|4. Processed Data| E[useQuery Hook]
+E -->|5. Updated State| F[React Component]
+```
+
+</details>
+
+* * *
+
+### 8\. **Additional Guidelines**
+
+1.  **Check Compatibility**
+    
+    *   We are using **Vite 5.x**, **React 18.x**, **Node.js >= 18.0.0**, **TypeScript 5.x**, **Express 4.x**, and **Tailwind v3.1**.
+    *   Confirm all suggestions are compatible with these versions.
+    *   If unsure, ask clarifying questions about the existing codebase.
+2.  **File Creation Policy**
+    
+    *   Before creating new files (hooks, workers, style modules, etc.), verify no existing file serves the same or similar purpose.
+    *   Extend or modify an existing file where possible.
+3.  **Documentation & Code Sync**
+    
+    *   All code changes and relevant documentation updates must be included in the same PR.
+    *   A PR should be considered incomplete if code and documentation are out of sync.
+4.  **Security & Performance**
+    
+    *   Do not commit any sensitive credentials or secrets. Use environment variables for private data.
+    *   Highlight potential performance bottlenecks, and suggest caching or other optimizations where necessary.
+    *   Adhere to least privilege principles for new endpoints or features.
+5.  **Testing Requirement**
+    
+    *   All new features or fixes must include relevant tests (Jest, Cypress, etc.) or updates to existing tests.
+    *   Provide example tests or updated coverage when proposing new code.
+6.  **Clarifications & Queries**
+    
+    *   If you're unsure about existing patterns, file structures, or constraints, ask clarifying questions rather than making assumptions.
+    *   If the project already has a known pattern (e.g., a standard approach to hooks or workers), confirm before introducing an alternative.
+7.  **Implementation Steps**
+    
+    *   If changes involve new features, bug fixes, performance enhancements, security updates, or dependency changes, refer to the **Update Triggers** section.
+    *   Document everything according to each section's specific rules (Vite, Tailwind, TypeScript, etc.).
+8.  **Quality Checks**
+    
+    *   Validate file paths, links, types, examples, and formatting.
+    *   Verify technical accuracy, completeness, clarity, and consistency in your solution.
+9.  **Emergency Procedures**
+    
+    *   For critical changes (security, API modifications, etc.), follow the guidelines in the **Emergency** section.
+    *   If it's a hotfix scenario, outline immediate impact, temporary measures, and the timeline for a permanent fix.
+
+
+### 9. Tool Usage Protocol
+
+#### 9.1 Tools Inventory
+Below are additional .txt resources in the tools directory. If you require specialized guidance (e.g., a plan, code analysis, or error diagnostics), refer to or request these files:
+actionPlan.txt
+    Purpose: Provides step-by-step guidance for implementing a new feature in a React application, focusing on how to modify an existing image feed component to support multi-column layouts via react-masonry-list.
+
+analyzeCodebase.txt
+    Purpose: Instructs the AI on how to review a codebase for relevant information, ensuring any requested updates or changes are fully informed by existing structures and data.
+
+compatibilityCheck.txt
+    Purpose: Guides the AI in comparing proposed changes against the existing codebase, helping determine if they can be integrated without code modifications or version conflicts.
+
+diagnose.txt
+    Purpose: Outlines a systematic approach to debugging by identifying each error, tracing it to a specific file, and proposing targeted fixes or improvements.
+
+errorAnalysis.txt
+    Purpose: Helps the AI interpret an error message and offer insights on how to resolve or work around the reported issue, emphasizing clarity for the end user.
+
+implementPlan.txt
+    Purpose: Combines planning and coding advice, ensuring that any user-requested changes are fully scoped, documented, and implemented in a consistent manner.
+
+implement&plan.txt
+    Purpose: Breaks a requested task into actionable steps and execution details, making sure both planning and implementation are addressed for a more complete solution.
+
+
+* * *
+
+### **Using This Prompt**
+
+Use this **Updated Refined Prompt** as a template whenever you request coding or documentation assistance from the AI. It encapsulates:
+
+*   **Your core project requirements** (Vite, Tailwind, TypeScript, React Query, React 18, SCSS, Workers).
+*   **Guidelines on file creation**, documentation, testing, and security.
+*   **Data flow diagrams** to clarify how data travels between frontend and backend.
+*   **Step-by-step instructions** on how the AI should verify and propose solutions in line with your existing codebase and best practices.
+
+By following these rules, the AI will be better equipped to offer suggestions that are compatible, well-documented, and secure—matching your project's workflow from development through deployment.
+
+

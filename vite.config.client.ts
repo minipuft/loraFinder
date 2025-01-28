@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist/client',
       rollupOptions: {
-        input: 'src/client/main.tsx', // Updated client entry point
+        input: './src/main.tsx', // Changed from src/client/main.tsx
         output: {
           entryFileNames: '[name].js',
           chunkFileNames: '[name].js',
@@ -77,5 +77,11 @@ export default defineConfig(({ mode }) => {
       extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json'],
     },
     root: process.cwd(),
+    css: {
+      modules: {
+        localsConvention: 'camelCase',
+        generateScopedName: '[name]__[local]__[hash:base64:5]'
+      }
+    },
   };
 });
