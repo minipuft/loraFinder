@@ -32,14 +32,35 @@ export async function getFolders(): Promise<FolderInfo[]> {
  * @throws Will throw an error if the API request fails.
  */
 export async function getImages(folder: string): Promise<ImageInfo[]> {
+  if (!folder) {
+    throw new Error("Folder parameter is required");
+  }
+
   try {
     const response = await api.get(
       `/images?folder=${encodeURIComponent(folder)}`
     );
+    
+    if (!Array.isArray(response.data)) {
+      console.error("Invalid response data:", response.data);
+      throw new Error("Invalid response format from server");
+    }
+    
     return response.data;
-  } catch (error) {
-    console.error("Error in getImages:", error);
-    throw new Error("Failed to fetch images");
+  } catch (error: any) {
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      const message = error.response.data?.error || error.response.statusText;
+      throw new Error(`Server error: ${message}`);
+    } else if (error.request) {
+      // The request was made but no response was received
+      throw new Error("No response from server");
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.error("Error in getImages:", error);
+      throw new Error(error.message || "Failed to fetch images");
+    }
   }
 }
 /**

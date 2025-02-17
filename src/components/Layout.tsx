@@ -50,16 +50,23 @@ const Layout: React.FC<LayoutProps> = ({
       setError(null);
       try {
         const fetchedImages = await getImages(selectedFolder);
-        setImages(fetchedImages);
-      } catch (err) {
-        setError("Failed to fetch images");
-        console.error(err);
+        setImages(fetchedImages || []); // Ensure we always set an array
+      } catch (err: any) {
+        const errorMessage = err.message || "Failed to fetch images";
+        setError(errorMessage);
+        setImages([]); // Set empty array on error
+        console.error("Error fetching images:", err);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchImages();
+    if (selectedFolder) {
+      fetchImages();
+    } else {
+      setImages([]);
+      setError("No folder selected");
+    }
   }, [selectedFolder]);
 
   // Handler for search functionality

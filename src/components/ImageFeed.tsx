@@ -45,18 +45,25 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
 
   // Group images by similar titles
   const groupedImages = useMemo(() => {
+    // Ensure images is an array and not null/undefined
+    if (!Array.isArray(images)) {
+      console.error("Images prop is not an array:", images);
+      return [];
+    }
+
     if (!isGrouped) {
       return images
-        .filter(image => image && image.width && image.height)
+        .filter(image => image && typeof image === 'object' && 'width' in image && 'height' in image)
         .map((image) => ({
           key: image.id,
           images: [image],
           isCarousel: false,
         }));
     }
+
     const groups: { [key: string]: ImageInfo[] } = {};
     images
-      .filter(image => image && image.width && image.height)
+      .filter(image => image && typeof image === 'object' && 'width' in image && 'height' in image)
       .forEach((image) => {
         const processedTitle = truncateImageTitle(image.alt);
         if (!groups[processedTitle]) {
