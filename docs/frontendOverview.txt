@@ -1,0 +1,325 @@
+Frontend Overview:
+MediaFlow is a fast and lightweight media gallery application built with Vite and React components, utilizing Tailwind CSS and SASS modules for styling. The application focuses on efficient image viewing and organization with a client-first architecture and TypeScript integration.
+
+Core Components (/src/components):
+
+1. Layout Components:
+   
+   Layout.tsx:
+   - Main layout wrapper component
+   - Props:
+     ```typescript
+     interface LayoutProps {
+       folders: FolderInfo[];
+       selectedFolder: string;
+       currentDirectory: string;
+       zoom: number;
+       isGrouped: boolean;
+       images: ImageInfo[];
+       isLoading: boolean;
+       error: string | null;
+     }
+     ```
+   - Features:
+     - Responsive layout management
+     - Component composition
+     - Error boundary integration
+   - State Management:
+     - Folder selection
+     - View preferences
+     - Loading states
+   
+   Navbar.tsx:
+   - Top navigation bar with search integration
+   - Props:
+     ```typescript
+     interface NavbarProps {
+       zoom: number;
+       onZoomChange: (value: number) => void;
+       isGrouped: boolean;
+       onGroupingChange: (value: boolean) => void;
+       currentDirectory: string;
+     }
+     ```
+   - Features:
+     - Search functionality
+     - View controls
+     - Navigation state
+   
+   Sidebar.tsx:
+   - Folder navigation with tree view
+   - Props:
+     ```typescript
+     interface SidebarProps {
+       folders: FolderInfo[];
+       selectedFolder: string;
+       onFolderSelect: (folder: string) => void;
+     }
+     ```
+   - Features:
+     - Tree view navigation
+     - Folder selection
+     - Path visualization
+
+2. Image Components:
+   
+   ImageFeed.tsx:
+   - Main image grid component
+   - Props:
+     ```typescript
+     interface ImageFeedProps {
+       images: ImageInfo[];
+       isLoading: boolean;
+       isGrouped: boolean;
+       zoom: number;
+     }
+     ```
+   - Features:
+     - Dynamic grid layout
+     - Image grouping
+     - Lazy loading
+     - Web Worker processing
+   - Performance:
+     - Virtualized rendering
+     - Image optimization
+     - Efficient updates
+   
+   ImageRow.tsx:
+   - Responsive image row container
+   - Props:
+     ```typescript
+     interface ImageRowProps {
+       images: ImageInfo[];
+       width: number;
+       height: number;
+     }
+     ```
+   - Features:
+     - Dynamic sizing
+     - Aspect ratio maintenance
+     - Window resize handling
+   
+   ImageItem.tsx:
+   - Individual image component
+   - Props:
+     ```typescript
+     interface ImageItemProps {
+       image: ImageInfo;
+       width: number;
+       height: number;
+       onClick?: () => void;
+     }
+     ```
+   - Features:
+     - Progressive loading
+     - Error handling
+     - Hover effects
+     - Alt text support
+   
+   ImageViewer.tsx:
+   - Main image viewing component
+   - Props:
+     ```typescript
+     interface ImageViewerProps {
+       images: ImageInfo[];
+       isLoading: boolean;
+       error: string | null;
+       selectedFolder: string;
+       isGrouped: boolean;
+       zoom: number;
+     }
+     ```
+   - Features:
+     - Conditional rendering
+     - Error states
+     - Loading states
+     - Image display
+
+3. UI Enhancement Components:
+   
+   SearchBar.tsx:
+   - Search input component
+   - Props:
+     ```typescript
+     interface SearchBarProps {
+       onSearch: (query: string) => void;
+       placeholder?: string;
+     }
+     ```
+   - Features:
+     - Debounced input
+     - Clear functionality
+     - Suggestions
+   
+   ZoomSlider.tsx:
+   - Image size control
+   - Props:
+     ```typescript
+     interface ZoomSliderProps {
+       value: number;
+       onChange: (value: number) => void;
+       min?: number;
+       max?: number;
+     }
+     ```
+   - Features:
+     - Smooth transitions
+     - Range constraints
+     - Visual feedback
+   
+   FileUpload.tsx:
+   - File upload component
+   - Props:
+     ```typescript
+     interface FileUploadProps {
+       onUpload: (files: File[]) => void;
+       accept?: string;
+       multiple?: boolean;
+     }
+     ```
+   - Features:
+     - Drag and drop
+     - Multiple files
+     - Progress tracking
+   
+   Background Components:
+   - LottieBackground.tsx: Animation component
+   - ParticleBackground.tsx: Interactive background
+   
+   CurrentDirectoryButton.tsx:
+   - Directory navigation component
+   - Props:
+     ```typescript
+     interface CurrentDirectoryButtonProps {
+       path: string;
+       onClick: () => void;
+     }
+     ```
+   - Features:
+     - Path display
+     - Click handling
+
+4. Data Management:
+   
+   API Integration:
+   - Axios client configuration
+   - Type-safe requests
+   - Error handling
+   - Response processing
+   
+   State Management:
+   - React hooks usage
+   - Context providers
+   - State updates
+   - Type safety
+   
+   Data Types:
+   ```typescript
+   interface ImageInfo {
+     id: string;
+     src: string;
+     alt: string;
+     title: string;
+     width: number;
+     height: number;
+   }
+
+   interface FolderInfo {
+     path: string;
+     name: string;
+     children?: FolderInfo[];
+   }
+   ```
+
+Styles (/src/styles):
+
+1. Module SCSS Files:
+   - Component-specific styles
+   - Scoped CSS modules
+   - Tailwind integration
+   - Responsive design
+
+2. Global Styles:
+   - Design system
+   - Typography
+   - Colors
+   - Layout
+   - Animations
+
+Performance Optimizations:
+- Image optimization
+- Code splitting
+- Lazy loading
+- Memoization
+- Worker offloading
+- State management
+
+Development Tools:
+- TypeScript configuration
+- Vite setup
+- CSS tooling
+- Environment management
+- HMR support
+
+TODO and Planned Features:
+
+1. UI Enhancements:
+   - [ ] Add image gallery view
+   - [ ] Implement advanced sorting
+   - [ ] Add image details panel
+   - [ ] Enhance mobile responsiveness
+   - [ ] Add dark mode support
+
+2. Performance Improvements:
+   - [ ] Implement virtual scrolling
+   - [ ] Add image preloading
+   - [ ] Optimize large folder handling
+   - [ ] Add service worker caching
+   - [ ] Implement progressive loading
+
+3. Feature Additions:
+   - [ ] Add image editing capabilities
+   - [ ] Implement image tagging
+   - [ ] Add favorites system
+   - [ ] Implement sharing features
+   - [ ] Add batch operations
+
+4. User Experience:
+   - [ ] Add keyboard shortcuts
+   - [ ] Implement drag-and-drop organization
+   - [ ] Add context menus
+   - [ ] Improve error messages
+   - [ ] Add tooltips and help
+
+5. Testing:
+   - [ ] Add component tests
+   - [ ] Implement E2E testing
+   - [ ] Add visual regression tests
+   - [ ] Add performance tests
+   - [ ] Add accessibility tests
+
+6. Documentation:
+   - [ ] Add component documentation
+   - [ ] Create style guide
+   - [ ] Add usage examples
+   - [ ] Create contribution guide
+   - [ ] Add testing documentation
+
+Implementation Timeline:
+1. Short-term (1-2 weeks):
+   - Virtual scrolling
+   - Dark mode
+   - Keyboard shortcuts
+   - Component tests
+
+2. Medium-term (2-4 weeks):
+   - Image editing
+   - Tagging system
+   - E2E tests
+   - Documentation
+
+3. Long-term (1-2 months):
+   - Advanced features
+   - Complete test coverage
+   - Performance optimization
+   - Mobile enhancements

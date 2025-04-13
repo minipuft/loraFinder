@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Cache and logs
+.eslintcache
+.npm
+*.log
+coverage/
+
+# Environment and config files
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Generated files
+*.generated.*
+*.min.js
+
+# Test files
+__snapshots__/
+*.test.js.snap
+
+# Misc
+.DS_Store
+*.pem
+.vercel

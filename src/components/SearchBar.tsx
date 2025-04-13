@@ -39,7 +39,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
       <motion.input
         type="text"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={e => setQuery(e.target.value)}
         className={styles.searchInput}
         placeholder="Search the future..."
         whileFocus={{ scale: 1.05 }}

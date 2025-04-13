@@ -1,8 +1,8 @@
-import axios from "axios";
-import { ImageInfo, FolderInfo } from "../types.js";
+import axios from 'axios';
+import { ImageInfo, FolderInfo } from '../types.js';
 
 const api = axios.create({
-  baseURL: "/api", // Assuming your API routes are under /api
+  baseURL: '/api', // Assuming your API routes are under /api
 });
 
 /**
@@ -13,14 +13,14 @@ const api = axios.create({
  */
 export async function getFolders(): Promise<FolderInfo[]> {
   try {
-    const response = await api.get("/folders");
+    const response = await api.get('/folders');
     return response.data.map((folder: { name: string; path: string }) => ({
       name: folder.name,
       path: folder.path,
     }));
   } catch (error) {
-    console.error("Error in getFolders:", error);
-    throw new Error("Failed to fetch folders");
+    console.error('Error in getFolders:', error);
+    throw new Error('Failed to fetch folders');
   }
 }
 
@@ -33,19 +33,17 @@ export async function getFolders(): Promise<FolderInfo[]> {
  */
 export async function getImages(folder: string): Promise<ImageInfo[]> {
   if (!folder) {
-    throw new Error("Folder parameter is required");
+    throw new Error('Folder parameter is required');
   }
 
   try {
-    const response = await api.get(
-      `/images?folder=${encodeURIComponent(folder)}`
-    );
-    
+    const response = await api.get(`/images?folder=${encodeURIComponent(folder)}`);
+
     if (!Array.isArray(response.data)) {
-      console.error("Invalid response data:", response.data);
-      throw new Error("Invalid response format from server");
+      console.error('Invalid response data:', response.data);
+      throw new Error('Invalid response format from server');
     }
-    
+
     return response.data;
   } catch (error: any) {
     if (error.response) {
@@ -55,11 +53,11 @@ export async function getImages(folder: string): Promise<ImageInfo[]> {
       throw new Error(`Server error: ${message}`);
     } else if (error.request) {
       // The request was made but no response was received
-      throw new Error("No response from server");
+      throw new Error('No response from server');
     } else {
       // Something happened in setting up the request that triggered an Error
-      console.error("Error in getImages:", error);
-      throw new Error(error.message || "Failed to fetch images");
+      console.error('Error in getImages:', error);
+      throw new Error(error.message || 'Failed to fetch images');
     }
   }
 }
@@ -78,26 +76,24 @@ export async function uploadFiles(
   onProgress: (progress: number) => void
 ): Promise<void> {
   const formData = new FormData();
-  formData.append("folder", folder);
-  files.forEach((file) => formData.append("files", file));
+  formData.append('folder', folder);
+  files.forEach(file => formData.append('files', file));
 
   try {
-    await api.post("/upload", formData, {
+    await api.post('/upload', formData, {
       headers: {
-        "Content-Type": "multipart/form-data",
+        'Content-Type': 'multipart/form-data',
       },
-      onUploadProgress: (progressEvent) => {
+      onUploadProgress: progressEvent => {
         if (progressEvent.total) {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           onProgress(percentCompleted);
         }
       },
     });
   } catch (error) {
-    console.error("Error in uploadFiles:", error);
-    throw new Error("Failed to upload files");
+    console.error('Error in uploadFiles:', error);
+    throw new Error('Failed to upload files');
   }
 }
 /**
@@ -112,8 +108,8 @@ export async function searchImages(query: string): Promise<ImageInfo[]> {
     const response = await api.get(`/search?q=${encodeURIComponent(query)}`);
     return response.data;
   } catch (error) {
-    console.error("Error in searchImages:", error);
-    throw new Error("Failed to search images");
+    console.error('Error in searchImages:', error);
+    throw new Error('Failed to search images');
   }
 }
 
@@ -125,10 +121,10 @@ export async function searchImages(query: string): Promise<ImageInfo[]> {
  */
 export async function getCurrentDirectory(): Promise<string> {
   try {
-    const response = await api.get("/getCurrentDirectory");
+    const response = await api.get('/getCurrentDirectory');
     return response.data.currentDirectory;
   } catch (error) {
-    console.error("Error in getCurrentDirectory:", error);
-    throw new Error("Failed to get current directory");
+    console.error('Error in getCurrentDirectory:', error);
+    throw new Error('Failed to get current directory');
   }
 }

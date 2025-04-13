@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 // Define the structure for the window size object
 interface WindowSize {
@@ -6,50 +6,60 @@ interface WindowSize {
   height: number | undefined;
 }
 
+// Debounce timeout in milliseconds
+const DEBOUNCE_TIMEOUT = 150;
+
 // Custom hook to track and return the current window size
 function useWindowSize() {
   // State to store the current window size
   const [windowSize, setWindowSize] = useState<WindowSize>({
-    width: undefined,
-    height: undefined,
+    width: window.innerWidth,
+    height: window.innerHeight,
   });
 
+  // Memoized resize handler
+  const handleResize = useCallback(() => {
+    const newWidth = window.innerWidth;
+    const newHeight = window.innerHeight;
+
+    // Only update if dimensions actually changed
+    if (newWidth !== windowSize.width || newHeight !== windowSize.height) {
+      // Use RAF for smooth updates
+      requestAnimationFrame(() => {
+        setWindowSize({
+          width: newWidth,
+          height: newHeight,
+        });
+      });
+    }
+  }, [windowSize.width, windowSize.height]);
+
   useEffect(() => {
-    // Variables for debouncing and tracking size changes
     let timeoutId: NodeJS.Timeout | null = null;
-    let lastWidth = window.innerWidth;
-    let lastHeight = window.innerHeight;
 
-    // Function to handle window resize events
-    function handleResize() {
-      // Clear any existing timeout to debounce the resize event
-      if (timeoutId) clearTimeout(timeoutId);
-
-      // Set a new timeout to update the window size after a short delay
-      timeoutId = setTimeout(() => {
-        const newWidth = window.innerWidth;
-        const newHeight = window.innerHeight;
-
-        // Only update the state if the size has actually changed
-        if (newWidth !== lastWidth || newHeight !== lastHeight) {
-          lastWidth = newWidth;
-          lastHeight = newHeight;
-          setWindowSize({ width: newWidth, height: newHeight });
-        }
-      }, 200); // 200ms delay for debouncing
+    // Debounced resize handler
+    function debouncedResize() {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(handleResize, DEBOUNCE_TIMEOUT);
     }
 
-    // Add event listener for window resize
-    window.addEventListener('resize', handleResize);
-
-    // Call handleResize immediately to set initial size
+    // Initial size calculation
     handleResize();
-    
-    // Cleanup function to remove event listener
-    return () => window.removeEventListener('resize', handleResize);
-  }, []); // Empty array ensures that effect is only run on mount
 
-  // Return the current window size
+    // Add event listener with debouncing
+    window.addEventListener('resize', debouncedResize);
+
+    // Cleanup
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      window.removeEventListener('resize', debouncedResize);
+    };
+  }, [handleResize]);
+
   return windowSize;
 }
 

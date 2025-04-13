@@ -1,5 +1,5 @@
 export function truncateImageTitle(title: string | undefined): string {
-  if (!title) return "Untitled";
+  if (!title) return 'Untitled';
 
   // Remove file extensions and common suffixes anywhere in the string
   const cleanTitle = title
@@ -25,9 +25,9 @@ export function truncateImageTitle(title: string | undefined): string {
     .split(' ')
     .map(word => {
       // Keep acronyms uppercase, capitalize first letter of other words
-      return word.match(/^[A-Z]{2,}$/) ? 
-        word : 
-        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      return word.match(/^[A-Z]{2,}$/)
+        ? word
+        : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
     .join(' ')
     .trim();
@@ -35,6 +35,6 @@ export function truncateImageTitle(title: string | undefined): string {
   // Truncate if necessary
   const maxLength = 30;
   return formattedTitle.length > maxLength
-    ? formattedTitle.substring(0, maxLength) + "..."
+    ? formattedTitle.substring(0, maxLength) + '...'
     : formattedTitle;
 }

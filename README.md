@@ -1,6 +1,6 @@
-# LoraFinder
+# MediaFlow
 
-LoraFinder is a web application for managing and viewing image files, with a focus on LORA (Low-Rank Adaptation) models and related content. Built with Vite, Express, and React, it provides a robust platform for image management and viewing.
+MediaFlow is a web application for managing and viewing image files, with a focus on displaying preview images for LORA (Low-Rank Adaptation) FLUX and related models. Built with Vite, Express, and React, it provides a robust platform for image management and viewing.
 
 ## Features
 
@@ -17,6 +17,7 @@ LoraFinder is a web application for managing and viewing image files, with a foc
 ## Tech Stack
 
 ### Frontend
+
 - React 18 with TypeScript
 - Vite for development and building
 - SCSS Modules + Tailwind CSS for styling
@@ -25,6 +26,7 @@ LoraFinder is a web application for managing and viewing image files, with a foc
 - Zustand for state management (planned)
 
 ### Backend
+
 - Express.js server
 - Sharp for image processing
 - Node Cache for server-side caching
@@ -40,18 +42,21 @@ LoraFinder is a web application for managing and viewing image files, with a foc
 ## Getting Started
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/yourusername/lorafinder.git
    cd lorafinder
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Set up environment variables**
    Create a `.env` file in the root directory:
+
    ```env
    VITE_PORT=3001
    VITE_HOST=localhost
@@ -59,10 +64,13 @@ LoraFinder is a web application for managing and viewing image files, with a foc
    ```
 
 4. **Development**
+
    ```bash
    npm run dev
    ```
+
    This will start:
+
    - Client at http://localhost:5173
    - Server at http://localhost:3001
 

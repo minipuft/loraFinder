@@ -18,11 +18,7 @@ interface HttpError extends Error {
  * @param {unknown} error - The error that occurred
  * @param {string} defaultMessage - A default message to use if the error is not an instance of Error
  */
-export function handleApiError(
-  res: Response,
-  error: unknown,
-  defaultMessage: string
-) {
+export function handleApiError(res: Response, error: unknown, defaultMessage: string) {
   logError('API Error', { error, message: defaultMessage });
 
   const statusCode = isHttpError(error) ? error.statusCode : 500;
@@ -32,7 +28,7 @@ export function handleApiError(
     success: false,
     error: defaultMessage,
     details: errorMessage,
-    code: isHttpError(error) ? error.code : undefined
+    code: isHttpError(error) ? error.code : undefined,
   });
 }
 
@@ -43,11 +39,7 @@ export function handleApiError(
  * @param {number} statusCode - The HTTP status code for the error
  * @param {string} [code] - Optional error code for client-side handling
  */
-export function createHttpError(
-  message: string,
-  statusCode: number,
-  code?: string
-): HttpError {
+export function createHttpError(message: string, statusCode: number, code?: string): HttpError {
   const error = new Error(message) as HttpError;
   error.statusCode = statusCode;
   if (code) error.code = code;

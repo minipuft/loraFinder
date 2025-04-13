@@ -1,46 +1,46 @@
-import express from 'express'
-import fs from 'fs'
-import path from 'path'
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
 
-const router = express.Router()
+const router = express.Router();
 
 router.get('/image', (req, res) => {
-  const { folder, file } = req.query
-  const mainDir = process.env.MAIN_DIRECTORY
+  const { folder, file } = req.query;
+  const mainDir = process.env.MAIN_DIRECTORY;
 
   if (!mainDir) {
-    return res.status(500).json({ error: "MAIN_DIRECTORY is not set in environment variables" })
+    return res.status(500).json({ error: 'MAIN_DIRECTORY is not set in environment variables' });
   }
 
-  if (typeof folder !== "string" || typeof file !== "string") {
-    return res.status(400).json({ error: "Invalid folder or file parameter" })
+  if (typeof folder !== 'string' || typeof file !== 'string') {
+    return res.status(400).json({ error: 'Invalid folder or file parameter' });
   }
 
-  const filePath = path.join(mainDir, folder, file)
+  const filePath = path.join(mainDir, folder, file);
 
   if (fs.existsSync(filePath)) {
-    const imageBuffer = fs.readFileSync(filePath)
-    const contentType = getContentType(path.extname(file))
-    res.setHeader("Content-Type", contentType)
-    res.send(imageBuffer)
+    const imageBuffer = fs.readFileSync(filePath);
+    const contentType = getContentType(path.extname(file));
+    res.setHeader('Content-Type', contentType);
+    res.send(imageBuffer);
   } else {
-    res.status(404).json({ error: "Image not found" })
+    res.status(404).json({ error: 'Image not found' });
   }
-})
+});
 
-export default router
+export default router;
 
 // Helper function to determine the content type based on file extension
 function getContentType(extension: string): string {
   switch (extension.toLowerCase()) {
-    case ".jpg":
-    case ".jpeg":
-      return "image/jpeg";
-    case ".png":
-      return "image/png";
-    case ".gif":
-      return "image/gif";
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.gif':
+      return 'image/gif';
     default:
-      return "application/octet-stream";
+      return 'application/octet-stream';
   }
 }

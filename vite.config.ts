@@ -11,19 +11,19 @@ export default defineConfig({
     },
     preprocessorOptions: {
       scss: {
-        additionalData: `@import "./src/styles/variables.scss";`,
+        additionalData: '@import "./src/styles/variables.scss";',
       },
     },
   },
   server: {
     middlewareMode: true,
     host: process.env.VITE_HOST,
-    port: parseInt(process.env.VITE_PORT || '3001', 10)
+    port: parseInt(process.env.VITE_PORT || '3001', 10),
   },
   resolve: {
     alias: {
       '@src': path.resolve(__dirname, './src'),
     },
-    extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.css', '.scss']
+    extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.css', '.scss'],
   },
 });

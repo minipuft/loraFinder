@@ -1,6 +1,14 @@
 {
-  // Extend from Next.js' recommended ESLint configuration
-  "extends": "next/core-web-vitals",
+  // Extend from ESLint's recommended configuration, React, TypeScript, and SonarJS
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:prettier/recommended"
+  ],
+
+  // Add React, TypeScript, and SonarJS plugins
+  "plugins": ["react", "@typescript-eslint", "prettier"],
 
   // Additional rules specific to this project
   "rules": {
@@ -19,7 +27,12 @@
     // Enforce consistent spacing before and after keywords
     "keyword-spacing": ["error", { "before": true, "after": true }],
     // Enforce consistent spacing inside braces
-    "object-curly-spacing": ["error", "always"]
+    "object-curly-spacing": ["error", "always"],
+    "prettier/prettier": "error",
+    "react/react-in-jsx-scope": "off",
+    "react/prop-types": "off",
+    "@typescript-eslint/explicit-module-boundary-types": "off",
+    "@typescript-eslint/no-explicit-any": "warn"
   },
 
   // Parser options for ESLint
@@ -34,10 +47,32 @@
     }
   },
 
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx"],
+      "parserOptions": {
+        "project": "./tsconfig.json"
+      }
+    },
+    {
+      "files": ["*.js", "*.jsx"],
+      "parser": "espree",
+      "rules": {
+        "@typescript-eslint/no-var-requires": "off"
+      }
+    }
+  ],
+
   // Environments where the code is intended to run
   "env": {
     "browser": true,
     "es2021": true,
     "node": true
+  },
+
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
   }
 }

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import Layout from "../components/Layout.js";
-import MainContent from "../components/MainContent.js";
-import { getFolders, getImages } from "../lib/api.js";
-import { ImageInfo, FolderInfo } from "../types.js";
+import React, { useState } from 'react';
+import Layout from '../components/Layout.js';
+import MainContent from '../components/MainContent.js';
+// import { getFolders, getImages } from '../lib/api.js'; // getFolders no longer needed here
+import { ViewMode } from '../types.js';
 
 /**
  * Home component - the main page of the application.
@@ -13,62 +13,45 @@ import { ImageInfo, FolderInfo } from "../types.js";
  */
 const Home: React.FC = () => {
   // State declarations for managing application data and UI
-  const [folders, setFolders] = useState<FolderInfo[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<string>("");
-  const [images, setImages] = useState<ImageInfo[]>([]);
+  // const [folders, setFolders] = useState<FolderInfo[]>([]); // Removed: Managed by useFolders in Sidebar
+  const [selectedFolder, setSelectedFolder] = useState<string>('');
+  // const [images, setImages] = useState<ImageInfo[]>([]); // Removed
   const [zoom, setZoom] = useState<number>(1);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [currentDirectory, setCurrentDirectory] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  // const [currentDirectory, setCurrentDirectory] = useState<string>(''); // Removed: Managed by useCurrentDirectory
+  // const [isLoading, setIsLoading] = useState<boolean>(false); // Removed
+  // const [error, setError] = useState<string | null>(null); // Removed
   const [isGrouped, setIsGrouped] = useState<boolean>(true);
+  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
 
   /**
    * Effect hook to fetch the list of folders when the component mounts.
    * Sets the first folder as selected if available.
+   * Removed: This is now handled by Sidebar component via useFolders hook.
    */
-  useEffect(() => {
-    const fetchFolders = async () => {
-      try {
-        const folderList = await getFolders();
-        setFolders(folderList);
-        if (folderList.length > 0) {
-          setSelectedFolder(folderList[0].name);
-        }
-      } catch (error) {
-        console.error("Error fetching folders:", error);
-        setError("Failed to fetch folders");
-      }
-    };
+  // useEffect(() => {
+  //   const fetchFolders = async () => {
+  //     try {
+  //       const folderList = await getFolders();
+  //       setFolders(folderList);
+  //       if (folderList.length > 0 && !selectedFolder) { // Only set initial folder if none selected
+  //         setSelectedFolder(folderList[0].name);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error fetching folders:', error);
+  //       // setError('Failed to fetch folders'); // setError removed
+  //     }
+  //   };
 
-    fetchFolders();
-  }, []);
+  //   fetchFolders();
+  // }, [selectedFolder]);
 
   /**
    * Effect hook to fetch images when the selected folder changes.
    * Updates loading state and handles errors.
+   * Removed: This is now handled by ImageFeed component via useFolderImages hook.
    */
-  useEffect(() => {
-    const fetchImages = async () => {
-      if (!selectedFolder) return;
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const imageList = await getImages(selectedFolder);
-        setImages(imageList);
-      } catch (error) {
-        console.error("Error fetching images:", error);
-        setError("Failed to fetch images");
-        setImages([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchImages();
-  }, [selectedFolder]);
+  // ... (Removed image fetching useEffect)
 
   /**
    * Handler for folder selection change.
@@ -77,6 +60,7 @@ const Home: React.FC = () => {
    */
   const handleFolderChange = (folder: string) => {
     setSelectedFolder(folder);
+    // No need to fetch images here manually anymore
   };
 
   /**
@@ -95,16 +79,17 @@ const Home: React.FC = () => {
    */
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    // TODO: Implement search functionality
+    // Search result display needs to be handled
   };
 
   /**
    * Handler for file upload completion.
    * Refreshes the images in the current folder.
+   * TODO: Replace with query invalidation using queryClient
    */
   const handleUploadComplete = () => {
-    // Refresh the images in the current folder
-    getImages(selectedFolder).then(setImages);
+    // Example: queryClient.invalidateQueries(['images', selectedFolder]);
+    console.log('TODO: Invalidate query for folder:', selectedFolder);
   };
 
   /**
@@ -115,28 +100,37 @@ const Home: React.FC = () => {
     setIsGrouped(prevState => !prevState);
   };
 
+  const handleViewModeChange = (newMode: ViewMode) => {
+    setViewMode(newMode);
+  };
+
   // Render the main layout with all necessary props
+  // Note: 'folders' & 'currentDirectory' props are removed from Layout
   return (
     <Layout
-      folders={folders}
+      // folders={folders} // Removed
       selectedFolder={selectedFolder}
       onFolderChange={handleFolderChange}
-      currentDirectory={selectedFolder}
+      // currentDirectory={selectedFolder} // Removed
       onSearch={handleSearch}
       zoom={zoom}
       onZoomChange={handleZoomChange}
       isGrouped={isGrouped}
       onGroupToggle={handleGroupToggle}
+      viewMode={viewMode}
+      onViewModeChange={handleViewModeChange}
     >
+      {/* Pass relevant state down to MainContent */}
+      {/* MainContent no longer needs images, isLoading, error */}
       <MainContent
-        images={images}
+        // images={images} // Removed
         zoom={zoom}
         searchQuery={searchQuery}
-        isLoading={isLoading}
-        error={error}
+        // isLoading={isLoading} // Removed
+        // error={error} // Removed
         selectedFolder={selectedFolder}
-        // onUploadComplete={handleUploadComplete}
         isGrouped={isGrouped}
+        viewMode={viewMode}
       />
     </Layout>
   );

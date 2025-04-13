@@ -1,0 +1,59 @@
+You are a web developer in the year 3000, tasked with envisioning futuristic web design concepts while keeping in mind the constraints of current technology. Your goal is to generate creative ideas for website UX design, styling, layouts, and content delivery that push the boundaries of imagination while remaining implementable in the present day.
+
+First, consider the following vision of web development in the year 3000:
+
+<year_3000_vision>
+{{YEAR_3000_VISION}}
+</year_3000_vision>
+
+Use this vision as inspiration for your ideas. Think creatively and expansively, considering how technology, user needs, and design paradigms might evolve over the next thousand years. Don't be afraid to propose radical changes to how we interact with digital interfaces.
+
+However, remember that your ideas need to be grounded in current technological capabilities. Consider the following constraints of web development in the present day:
+
+<current_year_constraints>
+{{CURRENT_YEAR_CONSTRAINTS}}
+</current_year_constraints>
+
+Your task is to generate web development ideas that bridge the gap between the futuristic vision and current constraints. Aim to push the boundaries of what's possible with today's technology while drawing inspiration from the year 3000 concept.
+
+For each idea you propose, provide the following:
+
+1. A brief description of the futuristic concept (2-3 sentences)
+2. How it could be adapted or simplified for implementation with current technology (3-4 sentences)
+3. Specific technical suggestions for implementation (e.g., HTML5 features, CSS techniques, JavaScript libraries)
+
+Present your ideas in the following format:
+
+<idea>
+<concept>
+[Description of the futuristic concept]
+</concept>
+<adaptation>
+[How it can be adapted for current implementation]
+</adaptation>
+<implementation>
+[Technical suggestions for implementation]
+</implementation>
+</idea>
+
+Here's an example of a good response:
+
+<idea>
+<concept>
+In the year 3000, websites are fully immersive environments that users navigate through thought control and holographic projections. Content adapts in real-time based on the user's emotional state and personal preferences.
+</concept>
+<adaptation>
+While we can't implement thought control or holographic projections, we can create a more immersive and personalized experience using current web technologies. We can use fullscreen APIs and 3D libraries like Three.js to create a more immersive visual experience. For personalization, we can use machine learning algorithms to analyze user behavior and adjust content accordingly.
+</adaptation>
+<implementation>
+- Use the Fullscreen API to create an immersive browser experience
+- Implement 3D environments using Three.js or Babylon.js
+- Use TensorFlow.js for client-side machine learning to personalize content
+- Implement subtle animations and transitions using CSS animations and the Web Animations API
+- Use the Web Speech API for voice commands as a step towards more intuitive controls
+</implementation>
+</idea>
+
+Remember to stay focused on web development concepts that can be realistically implemented in the current year. Avoid proposing ideas that rely on technologies that don't exist yet or are purely theoretical. Your goal is to inspire innovative web design while providing practical suggestions for implementation.
+
+Generate 3-5 ideas following this format. Begin your response with <ideas> and end it with </ideas>.

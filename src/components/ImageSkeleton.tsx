@@ -1,5 +1,5 @@
-import React from "react";
-import styles from "../styles/ImageItem.module.scss";
+import React from 'react';
+import styles from '../styles/ImageItem.module.scss';
 
 interface ImageSkeletonProps {
   containerWidth: number;
@@ -8,7 +8,7 @@ interface ImageSkeletonProps {
 
 const ImageSkeleton: React.FC<ImageSkeletonProps> = ({ containerWidth, containerHeight }) => {
   return (
-    <div 
+    <div
       className={`${styles.imageItem} ${styles.imageSkeleton}`}
       style={{
         width: containerWidth,

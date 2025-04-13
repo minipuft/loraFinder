@@ -1,1 +1,0 @@
-add comments for what every section is accomplishing, do not remove any code

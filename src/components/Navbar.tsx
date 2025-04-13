@@ -1,28 +1,33 @@
-import React, { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import React, { useEffect, useRef } from 'react';
+import styles from '../styles/Navbar.module.scss';
+import { ViewMode } from '../types.js';
 import CurrentDirectoryButton from './CurrentDirectoryButton';
 import SearchBar from './SearchBar';
 import ZoomSlider from './ZoomSlider';
-import styles from '../styles/Navbar.module.scss';
 
 // Update the props interface for the Navbar component
 interface NavbarProps {
-  currentDirectory: string;
+  // currentDirectory: string; // Removed: Fetched by CurrentDirectoryButton
   onSearch: (query: string) => void;
   zoom: number;
   onZoomChange: (newZoom: number) => void;
   isGrouped: boolean;
   onGroupToggle: () => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
 }
 
 // Define the Navbar component
 const Navbar: React.FC<NavbarProps> = ({
-  currentDirectory,
+  // currentDirectory, // Removed
   onSearch,
   zoom,
   onZoomChange,
   isGrouped,
   onGroupToggle,
+  viewMode,
+  onViewModeChange,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -58,13 +63,26 @@ const Navbar: React.FC<NavbarProps> = ({
       {/* Left section of the navbar */}
       <div className={styles.leftSection}>
         {/* Display the current directory */}
-        <CurrentDirectoryButton currentDirectory={currentDirectory} />
+        <CurrentDirectoryButton /> {/* No prop needed */}
         {/* Search functionality */}
         <SearchBar onSearch={onSearch} />
       </div>
       {/* Right section of the navbar */}
       <div className={styles.rightSection}>
-        {/* Add this button */}
+        {/* View mode toggle buttons */}
+        <div className={styles.viewModeButtons}>
+          {Object.values(ViewMode).map(mode => (
+            <motion.button
+              key={mode}
+              onClick={() => onViewModeChange(mode)}
+              className={`${styles.viewModeButton} ${viewMode === mode ? styles.active : ''}`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+            </motion.button>
+          ))}
+        </div>
         <motion.button
           onClick={onGroupToggle}
           className={styles.viewToggleButton}

@@ -1,5 +1,6 @@
-import React from 'react'
-import Home from './pages/Home.js'
+import React from 'react';
+import Home from './pages/Home.js';
+import './styles/views.css';
 
 function App() {
   return (
@@ -9,4 +10,4 @@ function App() {
   );
 }
 
-export default App
+export default App;

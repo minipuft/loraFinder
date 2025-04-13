@@ -17,7 +17,7 @@ const MAX_CACHE_SIZE = 100; // Adjust as needed
 function trimCache() {
   const cacheKeys = Object.keys(cache);
   if (cacheKeys.length > MAX_CACHE_SIZE) {
-    const oldestKey = cacheKeys.reduce((a, b) => cache[a].expiry < cache[b].expiry ? a : b);
+    const oldestKey = cacheKeys.reduce((a, b) => (cache[a].expiry < cache[b].expiry ? a : b));
     delete cache[oldestKey];
   }
 }
@@ -35,7 +35,7 @@ export function getCachedImages(folder: string): ImageInfo[] | undefined {
 export function setCachedImages(folder: string, images: ImageInfo[]): void {
   cache[folder] = {
     data: images,
-    expiry: Date.now() + CACHE_TTL
+    expiry: Date.now() + CACHE_TTL,
   };
   trimCache();
 }

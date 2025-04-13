@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect } from 'react';
 import { CUSTOM_PROPERTIES, DEFAULT_CUSTOM_PROPERTY_VALUES } from '../utils/constants';
 
 export function useCustomProperties() {
@@ -9,7 +9,7 @@ export function useCustomProperties() {
 
       document.documentElement.style.setProperty(CUSTOM_PROPERTIES.MOUSE_X, `${mouseX}px`);
       document.documentElement.style.setProperty(CUSTOM_PROPERTIES.MOUSE_Y, `${mouseY}px`);
-      
+
       console.log(`Mouse event: x=${mouseX}, y=${mouseY}, target=${e.target}`);
     }
 
@@ -23,14 +23,14 @@ export function useCustomProperties() {
       document.documentElement.style.setProperty(property, value);
     });
 
-    window.addEventListener("scroll", updateScrollProperty);
-    document.addEventListener("mousemove", updateCustomProperties);
-    document.addEventListener("click", updateCustomProperties);
+    window.addEventListener('scroll', updateScrollProperty);
+    document.addEventListener('mousemove', updateCustomProperties);
+    document.addEventListener('click', updateCustomProperties);
 
     return () => {
-      window.removeEventListener("scroll", updateScrollProperty);
-      document.removeEventListener("mousemove", updateCustomProperties);
-      document.removeEventListener("click", updateCustomProperties);
+      window.removeEventListener('scroll', updateScrollProperty);
+      document.removeEventListener('mousemove', updateCustomProperties);
+      document.removeEventListener('click', updateCustomProperties);
     };
   }, []);
 }

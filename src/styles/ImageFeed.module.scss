@@ -61,7 +61,9 @@
 .imageRow {
   opacity: 0;
   transform: translateY(20px) rotateX(-10deg);
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
 
   &.visible {
     opacity: 1;
@@ -111,6 +113,145 @@
 
 .image-feed {
   position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  width: 100%;
+  background: linear-gradient(
+    135deg,
+    rgba(2, 8, 20, 0.95) 0%,
+    rgba(5, 15, 35, 0.9) 50%,
+    rgba(2, 8, 20, 0.95) 100%
+  );
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(0, 30, 60, 0.15) 0%, transparent 60%),
+      radial-gradient(circle at 80% 70%, rgba(0, 40, 80, 0.1) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 20, 40, 0.03) 0%,
+      rgba(0, 30, 60, 0.05) 50%,
+      rgba(0, 20, 40, 0.03) 100%
+    );
+    background-size: 100% 10px;
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+.feedContent {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  padding: 2rem;
+}
+
+.waterMask {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(1.5px);
+  mix-blend-mode: overlay;
+  background: linear-gradient(180deg, rgba(0, 20, 40, 0.2) 0%, rgba(0, 30, 60, 0.15) 100%);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 4;
+}
+
+// Remove old ripple overlay styles
+.rippleOverlay {
+  display: none;
+}
+
+// Ensure proper stacking context
+.image-feed {
+  isolation: isolate;
+
+  & > div {
+    transform: translateZ(0);
+  }
+}
+
+// Add water effect specific styles
+:global(.image-feed) {
+  transform-style: preserve-3d;
+
+  & > div {
+    transform: translateZ(0);
+  }
+}
+
+.container {
+  width: 100%;
+  height: 100%;
+  position: relative;
   overflow: hidden;
 }
 
+.feed {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.gridContainer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.loading {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.noImages {
+  width: 100%;
+  text-align: center;
+  padding: 48px;
+  font-size: 18px;
+  color: #666;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

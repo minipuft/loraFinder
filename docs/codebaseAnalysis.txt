@@ -1,0 +1,202 @@
+ # Codebase Analysis for Zoom Implementation
+
+## 1. Current Implementation Analysis
+
+### 1.1 ImageFeed.tsx
+```typescript
+// Current issues:
+- Columns calculation doesn't consider zoom level
+- No handling of image overflow between rows
+- Fixed gap sizes regardless of zoom
+- No smooth transitions between layouts
+
+// Required changes:
++ Modify calculateColumns to include zoom factor
++ Add row overflow handling
++ Implement dynamic gap scaling
++ Add layout transition animations
+```
+
+### 1.2 ImageRow.tsx
+```typescript
+// Current issues:
+- Fixed minimum width constraints
+- No communication of overflow to parent
+- Static gap sizing
+- Limited layout flexibility
+
+// Required changes:
++ Add zoom-aware width calculations
++ Implement overflow detection and handling
++ Add dynamic gap scaling
++ Improve layout algorithm flexibility
+```
+
+### 1.3 ImageItem.tsx
+```typescript
+// Current issues:
+- Direct scaling without size updates
+- Limited animation control
+- No size change notifications
+- Performance bottlenecks
+
+// Required changes:
++ Implement size change notifications
++ Improve animation system
++ Add performance optimizations
++ Better aspect ratio handling
+```
+
+## 2. Key Components to Modify
+
+### 2.1 Column Calculation
+```typescript
+// Current:
+const calculateColumns = (containerWidth: number) => {
+  if (containerWidth >= 2560) return 7;
+  if (containerWidth >= 1920) return 6;
+  // ...
+};
+
+// Proposed:
+const calculateColumns = (containerWidth: number, zoom: number) => {
+  const effectiveWidth = containerWidth / zoom;
+  const baseColumns = Math.floor(effectiveWidth / MIN_IMAGE_WIDTH);
+  return clamp(baseColumns, MIN_COLUMNS, MAX_COLUMNS);
+};
+```
+
+### 2.2 Row Layout Algorithm
+```typescript
+// Current:
+const getImageWidth = (image: ImageInfo) => {
+  const aspectRatio = image.width / image.height;
+  const baseWidth = (aspectRatio / totalAspectRatio) * rowWidth;
+  return Math.max(baseWidth * zoom, 200);
+};
+
+// Proposed:
+const getImageWidth = (image: ImageInfo, zoom: number) => {
+  const aspectRatio = image.width / image.height;
+  const baseWidth = (aspectRatio / totalAspectRatio) * rowWidth;
+  const minWidth = MIN_IMAGE_WIDTH * zoom;
+  return Math.max(baseWidth * zoom, minWidth);
+};
+```
+
+### 2.3 Gap Calculation
+```typescript
+// Current:
+gap: '8px'
+
+// Proposed:
+const getGapSize = (zoom: number) => {
+  return `${Math.round(BASE_GAP * Math.sqrt(zoom))}px`;
+};
+```
+
+## 3. Performance Considerations
+
+### 3.1 Current Bottlenecks
+- Layout recalculation on every zoom change
+- Unnecessary re-renders
+- DOM updates not batched
+- Memory leaks in image processing
+
+### 3.2 Optimization Opportunities
+- Implement virtualization
+- Batch DOM updates
+- Use ResizeObserver
+- Optimize image processing
+- Add proper cleanup
+
+## 4. Visual Coherence Improvements
+
+### 4.1 Animation System
+```typescript
+// Current:
+animate={controls}
+transition={{ duration: 0.3 }}
+
+// Proposed:
+animate={controls}
+transition={{
+  type: "spring",
+  stiffness: 300,
+  damping: 20,
+  mass: 0.5
+}}
+layout="position"
+```
+
+### 4.2 Layout Transitions
+```typescript
+// Add layout transition group
+<AnimateSharedLayout>
+  <motion.div
+    layout
+    transition={{
+      layout: { duration: 0.3 }
+    }}
+  >
+    {/* Row content */}
+  </motion.div>
+</AnimateSharedLayout>
+```
+
+## 5. Required New Utilities
+
+### 5.1 Size Tracking
+```typescript
+const useSizeTracking = (ref: RefObject<HTMLElement>) => {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useResizeObserver(ref, (entry) => {
+    setSize({
+      width: entry.contentRect.width,
+      height: entry.contentRect.height
+    });
+  });
+  return size;
+};
+```
+
+### 5.2 Layout Calculation
+```typescript
+const calculateLayout = (
+  images: ImageInfo[],
+  containerWidth: number,
+  zoom: number
+) => {
+  const columns = calculateColumns(containerWidth, zoom);
+  const rows = distributeImages(images, columns, zoom);
+  return { columns, rows };
+};
+```
+
+## 6. Implementation Priority
+
+1. Column calculation updates
+2. Row overflow handling
+3. Gap scaling implementation
+4. Animation system improvements
+5. Performance optimizations
+
+## 7. Testing Requirements
+
+### 7.1 Unit Tests
+- Column calculation with zoom
+- Gap scaling accuracy
+- Overflow detection
+- Layout algorithms
+
+### 7.2 Integration Tests
+- Zoom interaction flow
+- Layout transitions
+- Performance metrics
+- Memory management
+
+### 7.3 Visual Tests
+- Layout consistency
+- Animation smoothness
+- Gap proportions
+- Responsive behavior

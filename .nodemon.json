@@ -17,4 +17,4 @@
     "*.tsbuildinfo"
   ],
   "exec": "tsx watch --clear-screen=false server.ts"
-} 
+}

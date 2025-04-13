@@ -13,7 +13,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ selectedFolder, onUploadComplet
       setUploading(true);
       const formData = new FormData();
       formData.append('folder', selectedFolder);
-      
+
       for (let i = 0; i < e.target.files.length; i++) {
         formData.append('file', e.target.files[i]);
       }

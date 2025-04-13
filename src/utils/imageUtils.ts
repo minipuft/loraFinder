@@ -1,6 +1,6 @@
-import path from "path";
-import sharp from "sharp";
-import { ImageInfo } from "@/types.js";
+import path from 'path';
+import sharp from 'sharp';
+import { ImageInfo } from '@/types.js';
 
 // Section: Supported Formats
 export const SUPPORTED_FORMATS = {
@@ -8,7 +8,7 @@ export const SUPPORTED_FORMATS = {
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.gif': 'image/gif',
-  '.webp': 'image/webp'
+  '.webp': 'image/webp',
 } as const;
 
 // Section: Content Type Determination
@@ -41,7 +41,7 @@ export function isImageFile(filename: string): boolean {
 /**
  * Cleans a LoRA preview image path by removing the .example.X part
  * This helps Sharp correctly identify the image format
- * 
+ *
  * @param {string} filePath - The original file path
  * @returns {string} The cleaned file path
  */
@@ -67,7 +67,7 @@ export async function getImageDimensions(
   try {
     // Try to detect if this is a LoRA preview image
     const isLoraPreview = filePath.includes('models/loras') && filePath.includes('.example.');
-    
+
     // Clean the path for Sharp processing if it's a LoRA preview
     const processPath = isLoraPreview ? cleanLoraPreviewPath(filePath) : filePath;
 
@@ -86,9 +86,9 @@ export async function getImageDimensions(
       error,
       isLoraPreview: filePath.includes('models/loras'),
       extension: path.extname(filePath),
-      cleanedPath: filePath.includes('.example.') ? cleanLoraPreviewPath(filePath) : filePath
+      cleanedPath: filePath.includes('.example.') ? cleanLoraPreviewPath(filePath) : filePath,
     });
-    
+
     // Return reasonable defaults based on the image type
     if (filePath.includes('models/loras')) {
       return { width: 512, height: 512 }; // Standard size for AI generated images
@@ -106,7 +106,7 @@ export async function getImageDimensions(
  * @returns {string} The title of the image.
  */
 export function getImageTitle(filename: string): string {
-  return filename.replace(/\.[^/.]+$/, "");
+  return filename.replace(/\.[^/.]+$/, '');
 }
 
 // Section: Thumbnail Path Generation
@@ -120,7 +120,7 @@ export function getImageTitle(filename: string): string {
 export function getThumbnailPath(imagePath: string): string {
   const dir = path.dirname(imagePath);
   const filename = path.basename(imagePath);
-  return path.join(dir, "thumbnails", filename);
+  return path.join(dir, 'thumbnails', filename);
 }
 
 // Section: File Size Validation
@@ -149,7 +149,7 @@ export function groupImagesByName(images: ImageInfo[]): {
 } {
   const groups: { [key: string]: ImageInfo[] } = {};
 
-  images.forEach((image) => {
+  images.forEach(image => {
     const baseName = image.alt.replace(/\s*\(\d+\)$/, '').trim();
     if (!groups[baseName]) {
       groups[baseName] = [];

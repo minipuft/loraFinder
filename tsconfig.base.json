@@ -35,10 +35,5 @@
     "src",
     "src/shared/types"
   ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "Prompts",
-    "Scripts",
-  ]
+  "exclude": ["node_modules", "dist", "Prompts", "Scripts"]
 }

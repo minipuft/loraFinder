@@ -1,0 +1,226 @@
+Backend Overview:
+MediaFlow's backend implements an Express server integrated with Vite, providing efficient API endpoints for media management and gallery organization. The backend follows a modular architecture with TypeScript for type safety, focusing on fast image serving and lightweight resource usage.
+
+Server Architecture:
+- Express server with Vite integration
+- Environment configuration via dotenv
+- CORS configuration for development and production
+- JSON body parsing
+- Static file serving
+- Development mode support with HMR
+
+API Implementation (/src/api):
+
+1. Image Management:
+   
+   images.ts:
+   - GET /api/images
+     - Query parameters:
+       - folder: Directory path (string, required)
+     - Response: Array of ImageInfo
+     - Implementation Details:
+       - Path validation and normalization
+       - Directory existence check
+       - Parallel image processing
+       - Dimension extraction
+       - Error handling with specific status codes:
+         - 400: Invalid folder parameter
+         - 404: Folder not found
+         - 500: Server error
+     - Security Features:
+       - Path traversal prevention
+       - Directory access validation
+     - Performance Optimizations:
+       - Parallel image processing
+       - Null filtering
+       - Type-safe implementations
+   
+   image.ts:
+   - GET /api/image
+     - Query parameters:
+       - folder: Directory path (string, required)
+       - file: Image filename (string, required)
+     - Features:
+       - File streaming for efficient delivery
+       - MIME type detection
+       - Error handling with status codes
+       - Path validation
+   
+   upload.ts:
+   - POST /api/upload
+     - Request: Multipart form data
+     - Features:
+       - File validation
+       - Directory creation
+       - Concurrent upload handling
+       - Progress tracking
+     - Security:
+       - File type validation
+       - Size limits
+       - Path validation
+
+2. Folder Management:
+   
+   folders.ts:
+   - GET /api/folders
+     - Implementation:
+       - Recursive directory traversal
+       - File counting
+       - Path validation
+       - Error handling
+     - Security:
+       - Access control
+       - Path normalization
+   
+   getCurrentDirectory.ts:
+   - GET /api/getCurrentDirectory
+     - Features:
+       - Current path retrieval
+       - Path validation
+       - Security checks
+     - Error Handling:
+       - Invalid path detection
+       - Access control validation
+
+3. Search Functionality:
+   
+   search.ts:
+   - GET /api/search
+     - Query parameters:
+       - q: Search query (string, required)
+     - Implementation Details:
+       - Recursive directory search
+       - Case-insensitive matching
+       - File filtering by extension
+       - Path normalization
+     - Performance Features:
+       - Efficient directory traversal
+       - Base64 ID generation
+       - Relative path calculation
+     - Error Handling:
+       - Invalid query handling
+       - Directory access validation
+
+4. Type Definitions:
+   
+   Types:
+   - ImageInfo interface:
+     ```typescript
+     interface ImageInfo {
+       id: string;
+       src: string;
+       alt: string;
+       title: string;
+       width: number;
+       height: number;
+     }
+     ```
+   - API response types
+   - Error types
+   
+   Utilities:
+   - Path validation and normalization
+   - File type checking
+   - Error formatting
+   - Response formatting
+
+Security Features:
+- Path traversal prevention
+- File type validation
+- Input sanitization
+- Error message sanitization
+- Directory access control
+- Environment variable validation
+
+Performance Features:
+- File streaming
+- Parallel processing
+- Efficient file operations
+- Type-safe implementations
+- Proper error handling
+- Memory efficient directory traversal
+
+Error Handling:
+- Consistent error format:
+  ```typescript
+  interface ErrorResponse {
+    error: string;
+    details?: any;
+  }
+  ```
+- HTTP status codes:
+  - 400: Bad Request (invalid parameters)
+  - 404: Not Found (resource not found)
+  - 500: Server Error (internal errors)
+  - Additional status codes as needed
+
+Development Tools:
+- TypeScript with strict mode
+- Environment variables
+- Development mode
+- Hot module replacement
+- Debugging support
+- Error logging
+
+TODO and Planned Features:
+
+1. Performance Enhancements:
+   - [ ] Implement image caching
+   - [ ] Add response compression
+   - [ ] Implement request rate limiting
+   - [ ] Add connection pooling
+   - [ ] Optimize large directory handling
+
+2. Security Improvements:
+   - [ ] Add authentication system
+   - [ ] Implement user permissions
+   - [ ] Add API key validation
+   - [ ] Enhance input validation
+   - [ ] Add request sanitization
+
+3. Feature Additions:
+   - [ ] Image metadata extraction
+   - [ ] Image transformation API
+   - [ ] Batch operations support
+   - [ ] WebSocket real-time updates
+   - [ ] Image optimization service
+
+4. Monitoring and Logging:
+   - [ ] Add request logging
+   - [ ] Implement error tracking
+   - [ ] Add performance monitoring
+   - [ ] Add audit logging
+   - [ ] Implement health checks
+
+5. Documentation:
+   - [ ] Add API documentation (OpenAPI/Swagger)
+   - [ ] Add code documentation
+   - [ ] Create deployment guide
+   - [ ] Add configuration guide
+   - [ ] Create troubleshooting guide
+
+6. Testing:
+   - [ ] Add unit tests
+   - [ ] Add integration tests
+   - [ ] Add load testing
+   - [ ] Add security testing
+   - [ ] Add API testing
+
+Implementation Timeline:
+1. Short-term (1-2 weeks):
+   - Image caching
+   - Basic authentication
+   - Request logging
+   - API documentation
+
+2. Medium-term (2-4 weeks):
+   - Image transformation API
+   - User permissions
+   - Performance monitoring
+   - Unit tests
+
+3. Long-term (1-2 months):
+   - WebSocket updates
+   - Complete test coverage
+   - Advanced security features
+   - Monitoring system
