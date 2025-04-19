@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Layout from '../components/Layout.js';
 import MainContent from '../components/MainContent.js';
 // import { getFolders, getImages } from '../lib/api.js'; // getFolders no longer needed here
 import { ViewMode } from '../types.js';
+// Import the settings utilities
+import { getHomeDirectory } from '../utils/settings.js';
 
 /**
  * Home component - the main page of the application.
@@ -14,7 +16,9 @@ import { ViewMode } from '../types.js';
 const Home: React.FC = () => {
   // State declarations for managing application data and UI
   // const [folders, setFolders] = useState<FolderInfo[]>([]); // Removed: Managed by useFolders in Sidebar
-  const [selectedFolder, setSelectedFolder] = useState<string>('');
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
+    return getHomeDirectory() || '';
+  });
   // const [images, setImages] = useState<ImageInfo[]>([]); // Removed
   const [zoom, setZoom] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -23,6 +27,9 @@ const Home: React.FC = () => {
   // const [error, setError] = useState<string | null>(null); // Removed
   const [isGrouped, setIsGrouped] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
+
+  // Create ref for the main scrollable element
+  const mainScrollRef = useRef<HTMLElement>(null);
 
   /**
    * Effect hook to fetch the list of folders when the component mounts.
@@ -119,6 +126,7 @@ const Home: React.FC = () => {
       onGroupToggle={handleGroupToggle}
       viewMode={viewMode}
       onViewModeChange={handleViewModeChange}
+      mainRef={mainScrollRef}
     >
       {/* Pass relevant state down to MainContent */}
       {/* MainContent no longer needs images, isLoading, error */}
@@ -131,6 +139,7 @@ const Home: React.FC = () => {
         selectedFolder={selectedFolder}
         isGrouped={isGrouped}
         viewMode={viewMode}
+        scrollContainerRef={mainScrollRef}
       />
     </Layout>
   );

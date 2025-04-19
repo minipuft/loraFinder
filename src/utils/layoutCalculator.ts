@@ -63,7 +63,7 @@ const generateCacheKey = (
 };
 
 // Cache invalidation threshold (in pixels)
-const CACHE_INVALIDATION_THRESHOLD = 50;
+const CACHE_INVALIDATION_THRESHOLD = 8;
 
 class SizeAwareCache<T> {
   private cache: Map<string, { data: T; width: number }>;

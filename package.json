@@ -48,6 +48,7 @@
     "classnames": "^2.5.1",
     "dotenv": "^16.4.7",
     "express": "^4.19.2",
+    "fast-average-color": "^9.5.0",
     "formidable": "^3.5.1",
     "framer-motion": "^11.5.4",
     "gl-matrix": "^3.4.3",

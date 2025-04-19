@@ -1,6 +1,6 @@
+import { ImageInfo } from '@/types.js';
 import path from 'path';
 import sharp from 'sharp';
-import { ImageInfo } from '@/types.js';
 
 // Section: Supported Formats
 export const SUPPORTED_FORMATS = {

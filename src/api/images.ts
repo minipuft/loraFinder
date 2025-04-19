@@ -1,8 +1,8 @@
 import express from 'express';
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { ImageInfo } from '../types.js';
-import { isImageFile, getImageDimensions } from '../utils/imageUtils.js';
+import { getImageDimensions, isImageFile } from '../utils/imageUtils.js';
 
 const router = express.Router();
 
@@ -26,10 +26,15 @@ router.get('/images', async (req, res) => {
     res.status(200).json(images);
   } catch (error: any) {
     console.error('Error in getImages:', error);
-    if (error.message.includes('Folder not found')) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       res.status(404).json({ error: `Folder not found: ${folder}` });
+    } else if (error instanceof Error && error.message.includes('Access denied')) {
+      res.status(403).json({ error: error.message });
     } else {
-      res.status(500).json({ error: 'Failed to fetch images', details: error.message });
+      res.status(500).json({
+        error: 'Failed to fetch images',
+        details: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 });
@@ -44,13 +49,18 @@ async function getImages(folder: string): Promise<ImageInfo[]> {
     throw new Error('Invalid folder path: Access denied');
   }
 
-  if (!fs.existsSync(imagesDirectory)) {
-    throw new Error(`Folder not found: ${folder}`);
+  let fileNames: string[];
+  try {
+    fileNames = await fs.readdir(imagesDirectory);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      throw new Error(`Folder not found: ${folder}`);
+    } else {
+      console.error(`Error reading directory ${imagesDirectory}:`, error);
+      throw new Error('Failed to read image directory');
+    }
   }
 
-  const fileNames = fs.readdirSync(imagesDirectory);
-
-  // First collect the promises with proper typing
   const imagePromises = fileNames.filter(isImageFile).map(async fileName => {
     try {
       const id = fileName.replace(/\.[^/.]+$/, '');
@@ -71,7 +81,6 @@ async function getImages(folder: string): Promise<ImageInfo[]> {
     }
   });
 
-  // Then resolve promises and filter out nulls with type guard
   const results = await Promise.all(imagePromises);
   const images: ImageInfo[] = results.filter((image): image is ImageInfo => image !== null);
 

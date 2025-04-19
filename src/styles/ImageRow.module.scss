@@ -5,9 +5,6 @@
   overflow: visible;
   transition: opacity 0.3s ease;
   animation: fadeInUp 0.5s ease-out forwards;
-  gap: 8px;
-  margin-bottom: 8px;
-  min-height: 200px;
   transform-style: preserve-3d;
   perspective: 1000px;
   will-change: transform;
@@ -18,9 +15,8 @@
   }
 
   &__item {
-    // Add styles for individual items in the row
     flex: 1;
-    min-width: 0; // Allows flex items to shrink below their minimum content size
+    min-width: 0;
   }
 
   @media (max-width: 768px) {
@@ -33,7 +29,6 @@
   overflow: hidden;
   border-radius: 8px;
   transition: transform 0.3s ease-out;
-  min-width: 200px;
   flex-grow: 0;
   flex-shrink: 1;
   transform-style: preserve-3d;
@@ -72,22 +67,10 @@
   perspective: 1000px;
 }
 
-// Add support for reduced motion
-@media (prefers-reduced-motion: reduce) {
-  .imageRow,
-  .imageWrapper,
-  .parallaxLayer {
-    transition: none;
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
+for reduced motion .parallaxLayer {
+  .imageRow {
+    animation: none;
+    ity: 1;
     transform: translateY(0);
   }
 }

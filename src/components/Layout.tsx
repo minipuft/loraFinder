@@ -4,9 +4,16 @@ import MainContent from './MainContent.js';
 import Navbar from './Navbar.js';
 import Sidebar from './Sidebar.js';
 // import { getImages } from '../lib/api.js'; // Removed: Data fetching moved to hooks/ImageFeed
+import gsap from 'gsap';
+import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
+import { ColorProvider } from '../contexts/ColorContext';
 import { useCustomProperties } from '../hooks/useCustomProperties';
-import LottieBackground from './LottieBackground.js';
-import ParticleBackground from './ParticleBackground.js';
+// Import the new AuraBackground
+import AuraBackground from './AuraBackground.js';
+// Remove ParticleBackground import
+// import ParticleBackground from './ParticleBackground.js';
+
+gsap.registerPlugin(ScrollToPlugin);
 
 // Define the props interface for the Layout component
 interface LayoutProps {
@@ -20,6 +27,7 @@ interface LayoutProps {
   onGroupToggle: () => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
+  mainRef: React.RefObject<HTMLElement>;
 }
 
 // Define the Layout component
@@ -34,6 +42,7 @@ const Layout: React.FC<LayoutProps> = ({
   onGroupToggle,
   viewMode,
   onViewModeChange,
+  mainRef,
 }) => {
   useCustomProperties();
 
@@ -100,35 +109,39 @@ const Layout: React.FC<LayoutProps> = ({
   // Render the layout structure
   return (
     <div className="flex flex-col h-screen relative bg-transparent">
-      <div className="gradient-overlay"></div>
-      <LottieBackground />
-      <ParticleBackground />
-      <Navbar
-        onSearch={handleSearch} // Use internal handleSearch
-        zoom={zoom}
-        onZoomChange={onZoomChange}
-        isGrouped={isGrouped}
-        onGroupToggle={onGroupToggle}
-        viewMode={viewMode}
-        onViewModeChange={onViewModeChange}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar selectedFolder={selectedFolder} onFolderChange={onFolderChange} />
-        <main className="flex-1 overflow-auto p-4 relative bg-transparent">
-          <div className="relative z-10">
-            <MainContent
-              // images={images} // Removed
-              selectedFolder={selectedFolder}
-              searchQuery={searchQuery} // Still passing search query down
-              // isLoading={isLoading} // Removed
-              // error={error} // Removed
-              zoom={zoom}
-              isGrouped={isGrouped}
-              viewMode={viewMode}
-            />
-          </div>
-        </main>
-      </div>
+      <ColorProvider>
+        <div className="gradient-overlay"></div>
+        {/* Use AuraBackground instead of ParticleBackground */}
+        <AuraBackground />
+        {/* <ParticleBackground /> */}
+        <Navbar
+          onSearch={handleSearch}
+          zoom={zoom}
+          onZoomChange={onZoomChange}
+          isGrouped={isGrouped}
+          onGroupToggle={onGroupToggle}
+          viewMode={viewMode}
+          onViewModeChange={onViewModeChange}
+        />
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar selectedFolder={selectedFolder} onFolderChange={onFolderChange} />
+          <main ref={mainRef} className="flex-1 overflow-auto p-4 relative bg-transparent">
+            <div className="relative z-10">
+              <MainContent
+                // images={images} // Removed
+                selectedFolder={selectedFolder}
+                searchQuery={searchQuery}
+                // isLoading={isLoading} // Removed
+                // error={error} // Removed
+                zoom={zoom}
+                isGrouped={isGrouped}
+                viewMode={viewMode}
+                scrollContainerRef={mainRef}
+              />
+            </div>
+          </main>
+        </div>
+      </ColorProvider>
     </div>
   );
 };
