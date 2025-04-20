@@ -1,8 +1,9 @@
-import { motion, useAnimation } from 'framer-motion';
+import { motion, useAnimation, Variants } from 'framer-motion';
 import React, { memo, useRef } from 'react';
 import styles from '../styles/ImageRow.module.scss';
 import { ImageInfo } from '../types.js';
-import { createImageProcessor } from '../workers/imageProcessor';
+// import { createImageProcessor } from '../workers/imageProcessor'; // No longer needed directly
+import WorkerPool from '../workers/workerPool'; // Import WorkerPool type
 import ImageItem, { ImageHoverData } from './ImageItem.js';
 
 // Define the props interface for the ImageRow component
@@ -15,19 +16,35 @@ interface ImageRowProps {
   isLastRow: boolean;
   rowHeight: number;
   groupedImages: { key: string; images: ImageInfo[]; isCarousel: boolean }[];
-  processedImages: { [key: string]: { low: string; high: string } };
-  imageProcessor: ReturnType<typeof createImageProcessor>;
+  workerPool: WorkerPool;
   gap: number;
   containerWidth: number;
   onImageHover: (data: ImageHoverData) => void;
+  onImageLoadError: (imageId: string) => void;
 }
 
-// Define a smoother spring transition for layout animations
+// Define a smoother transition for layout animations using a soft spring
 const smoothLayoutTransition = {
-  type: 'spring',
-  stiffness: 200, // Lower stiffness for less aggression
-  damping: 25, // Adjust damping for smoothness
-  mass: 0.8, // Adjust mass if needed
+  type: 'spring', // Back to spring for a more natural feel
+  stiffness: 120, // Lower stiffness for less aggression
+  damping: 30, // Higher damping to reduce oscillation
+  mass: 1, // Standard mass
+  // Removed tween-specific parameters
+};
+
+// Define variants for item entrance animation
+const itemVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: (i: number) => ({
+    // Accept custom data (index)
+    opacity: 1,
+    scale: 1,
+    transition: {
+      delay: i * 0.03, // Stagger the animation based on index
+      duration: 0.3,
+      ease: 'easeOut',
+    },
+  }),
 };
 
 // Define the ImageRow component
@@ -40,11 +57,11 @@ const ImageRow: React.FC<ImageRowProps> = ({
   isLastRow,
   rowHeight,
   groupedImages,
-  processedImages,
-  imageProcessor,
+  workerPool,
   gap,
   containerWidth,
   onImageHover,
+  onImageLoadError,
 }) => {
   const rowRef = useRef<HTMLDivElement>(null);
   const controls = useAnimation();
@@ -97,6 +114,10 @@ const ImageRow: React.FC<ImageRowProps> = ({
           <motion.div
             key={image.id}
             className={styles.imageWrapper}
+            custom={index}
+            initial="hidden"
+            animate="visible"
+            variants={itemVariants}
             style={{
               width: `${width}px`,
               height: `${rowHeight}px`,
@@ -118,9 +139,9 @@ const ImageRow: React.FC<ImageRowProps> = ({
               zoom={zoom}
               isCarousel={group?.isCarousel || false}
               groupImages={group?.images || []}
-              processedImage={processedImages[image.id]}
-              imageProcessor={imageProcessor}
+              workerPool={workerPool}
               onImageHover={onImageHover}
+              onImageLoadError={onImageLoadError}
             />
           </motion.div>
         );

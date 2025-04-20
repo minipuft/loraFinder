@@ -25,14 +25,11 @@ import { ImageHoverData } from './ImageItem.js';
 import ImageRow from './ImageRow.js';
 import ImageSkeleton from './ImageSkeleton.js';
 // import Lottie from 'react-lottie';
-import { useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { FastAverageColor } from 'fast-average-color';
 import { ColorContext } from '../contexts/ColorContext';
 import { useFolderImages } from '../hooks/query/useFolderImages';
-import { useFolders } from '../hooks/query/useFolders';
 import useWindowSize from '../hooks/useWindowSize.js';
-import { getImages } from '../lib/api';
 import { loadScrollState, saveScrollState, ScrollState } from '../lib/cache/feedStateCache';
 import AnimationSystem from '../utils/AnimationSystem';
 import {
@@ -114,7 +111,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   scrollContainerRef,
 }) => {
   const {
-    data: images,
+    data: originalImages,
     isLoading,
     isError,
     error,
@@ -131,9 +128,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const { scrollY } = useViewportScroll();
   const y1 = useTransform(scrollY, [0, 300], [0, 200]);
   const y2 = useTransform(scrollY, [0, 300], [0, -200]);
-  const [processedImages, setProcessedImages] = useState<{
-    [key: string]: { low: string; high: string };
-  }>({});
   const animationSystem = useMemo(() => AnimationSystem.getInstance(), []);
   const { setDominantColors, setHoverState } = useContext(ColorContext);
   const facRef = useRef<FastAverageColor | null>(null);
@@ -149,11 +143,21 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const OVERSCAN_MAX = 20;
   const EMA_ALPHA = 0.8; // smoothing factor: higher => smoother
   const OVERSCAN_FACTOR = 15; // map velocity to overscan range
-  const queryClient = useQueryClient();
-  const { data: foldersList } = useFolders();
-  const prefetchTriggeredRef = useRef(false);
-  const prefetchRef = useRef<HTMLDivElement | null>(null);
-  const [isPrefetchVisible, setIsPrefetchVisible] = useState(false);
+  const workerPool = useMemo(() => WorkerPool.getInstance(), []);
+
+  // State to track failed image IDs
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+
+  // Callback to report image load errors
+  const handleImageLoadError = useCallback((imageId: string) => {
+    setFailedImageIds(prev => {
+      if (prev.has(imageId)) return prev; // Avoid unnecessary state updates
+      console.log(`ImageFeed: Registering error for image ${imageId}`);
+      const newSet = new Set(prev);
+      newSet.add(imageId);
+      return newSet;
+    });
+  }, []);
 
   // --- Scroll Persistence Logic ---
 
@@ -235,22 +239,25 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       }
 
       debouncedSaveScroll.cancel?.();
+      // --- ADD CANCELLATION ON UNMOUNT --- >
+      console.log('ImageFeed: Unmounting, cancelling pending tasks.');
+      workerPool.cancelPendingTasks();
     };
     // Remove containerWidth from dependencies, load immediately
-  }, [folderPath, /* containerWidth, */ scrollContainerRef, debouncedSaveScroll]);
+  }, [folderPath, scrollContainerRef, debouncedSaveScroll, workerPool]);
 
   // --- End Scroll Persistence Logic ---
 
   // Calculate average aspect ratio for fallback estimation
   const avgAspectRatio = useMemo(() => {
-    if (!images || images.length === 0) return 1; // Default aspect ratio
+    if (!originalImages || originalImages.length === 0) return 1; // Default aspect ratio
 
-    const validImages = images.filter(img => img && img.width > 0 && img.height > 0);
+    const validImages = originalImages.filter(img => img && img.width > 0 && img.height > 0);
     if (validImages.length === 0) return 1;
 
     const totalRatio = validImages.reduce((sum, img) => sum + img.width / img.height, 0);
     return totalRatio / validImages.length;
-  }, [images]);
+  }, [originalImages]);
 
   // Calculate layout metrics (using helper function for clarity if needed)
   const layoutMetrics = useMemo(() => {
@@ -274,29 +281,24 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     };
   }, [containerWidth, columns, zoom, avgAspectRatio]);
 
-  // Use global worker pool instead of creating new workers
-  const imageProcessor = useMemo(() => WorkerPool.getInstance().getImageProcessor(), []);
-
-  // Cleanup worker when component unmounts
-  useEffect(() => {
-    return () => {
-      if (viewMode === ViewMode.GRID) {
-        WorkerPool.getInstance().cleanup();
-      }
-    };
-  }, [viewMode]);
-
   // Reset states when folder or view mode changes
   useEffect(() => {
     setLightboxIndex(-1);
     setLightboxImages([]);
-    setProcessedImages({});
-    setRowTransforms([]);
     lastProcessedRowIndexRef.current = null;
-    prefetchTriggeredRef.current = false;
     setDominantColors([]);
-    // Scroll position is handled by persistence logic, don't reset here
-  }, [folderPath, viewMode, setDominantColors]);
+    setFailedImageIds(new Set()); // Reset failed IDs on folder change
+    console.log(
+      `ImageFeed: ${folderPath ? 'Folder' : 'ViewMode/Group'} changed, cancelling pending tasks.`
+    );
+    workerPool.cancelPendingTasks();
+  }, [folderPath, viewMode, isGrouped, setDominantColors, workerPool]);
+
+  // --- ADD CANCELLATION ON ZOOM CHANGE --- >
+  useEffect(() => {
+    console.log('ImageFeed: Zoom changed, cancelling pending tasks.');
+    workerPool.cancelPendingTasks();
+  }, [zoom, workerPool]);
 
   // Initialize FAC instance on mount
   useEffect(() => {
@@ -306,17 +308,19 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     };
   }, []);
 
-  // Enhanced container width management
-  useEffect(() => {
-    const updateContainerWidth = () => {
-      if (!feedRef.current) return;
+  // --- Container Width Management ---
 
-      const rect = feedRef.current.getBoundingClientRect();
-      // Use the actual measured width from the container
-      const newWidth = Math.max(MIN_IMAGE_WIDTH, rect.width);
+  // Shared function to update width and columns
+  const updateContainerWidth = useCallback(() => {
+    if (!feedRef.current) return;
 
-      if (newWidth !== containerWidth) {
-        setContainerWidth(newWidth);
+    const rect = feedRef.current.getBoundingClientRect();
+    const newWidth = Math.max(MIN_IMAGE_WIDTH, rect.width);
+
+    // Check if width actually changed before updating state
+    setContainerWidth(prevWidth => {
+      if (newWidth !== prevWidth) {
+        // Recalculate layout columns based on the new width
         const config: LayoutConfig = {
           containerWidth: newWidth,
           zoom,
@@ -324,27 +328,48 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
           isGrouped,
         };
         const layout = calculateLayout(config);
+        // Update columns directly here if needed, or rely on layoutMetrics memo
         setColumns(layout.columns);
+        return newWidth;
       }
-    };
+      return prevWidth; // Return previous width if no change
+    });
+  }, [zoom, viewMode, isGrouped]); // Dependencies are things used *inside* the function
 
+  // Use useLayoutEffect for the *initial* measurement before paint
+  useLayoutEffect(() => {
     updateContainerWidth();
+  }, [updateContainerWidth]); // Re-run if the function identity changes (due to its deps)
 
+  // Use useEffect for setting up listeners for *subsequent* updates
+  useEffect(() => {
     // Add resize observer for more accurate width updates
     const resizeObserver = new ResizeObserver(updateContainerWidth);
     if (feedRef.current) {
       resizeObserver.observe(feedRef.current);
     }
 
+    // Use standard resize listener as a fallback or additional trigger
     window.addEventListener('resize', updateContainerWidth);
 
+    // Cleanup listeners on unmount
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateContainerWidth);
     };
-  }, [zoom, viewMode, isGrouped, containerWidth, folderPath]);
+    // This effect only needs to run once to set up listeners
+    // updateContainerWidth is stable due to useCallback
+  }, [updateContainerWidth]);
 
-  // Modified groupedImages calculation with better error handling
+  // --- End Container Width Management ---
+
+  // Filter out images that failed to load *before* grouping/layout
+  const images = useMemo(() => {
+    if (!originalImages) return [];
+    return originalImages.filter(img => !failedImageIds.has(img.id));
+  }, [originalImages, failedImageIds]);
+
+  // Modified groupedImages calculation (uses filtered images)
   const groupedImages = useMemo(() => {
     if (!Array.isArray(images) || images.length === 0) {
       return [];
@@ -384,7 +409,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     }));
   }, [images, isGrouped]);
 
-  // Enhanced groupedRows calculation with better error handling and viewMode awareness
+  // Enhanced groupedRows calculation (uses filtered images via groupedImages)
   const groupedRows = useMemo(() => {
     if (!containerWidth || groupedImages.length === 0 || viewMode !== ViewMode.GRID) return [];
 
@@ -394,14 +419,13 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
 
     if (firstImages.length === 0) return [];
 
-    // Use our optimized distributeImages with dynamic fallback row height
     return distributeImages(
       firstImages,
       containerWidth,
       zoom,
       layoutMetrics.estimatedRowHeightFallback
     );
-  }, [groupedImages, zoom, containerWidth, viewMode, layoutMetrics.estimatedRowHeightFallback]);
+  }, [groupedImages, zoom, containerWidth, viewMode, layoutMetrics.estimatedRowHeightFallback]); // Depends on groupedImages
 
   // Define the useEffect that updates rowHeightsRef HERE, AFTER groupedRows
   useEffect(() => {
@@ -469,72 +493,27 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     folderPath,
   ]);
 
-  // Listen for scroll and adjust overscan based on velocity
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    let lastTime = performance.now();
-    let lastScrollTop = container.scrollTop;
-    let frameId: number;
-    const onScroll = () => {
-      if (frameId) cancelAnimationFrame(frameId);
-      frameId = requestAnimationFrame(() => {
-        const now = performance.now();
-        const scrollTop = container.scrollTop;
-        const dy = scrollTop - lastScrollTop;
-        const dt = now - lastTime;
-        const velocity = Math.abs(dy) / (dt || 1);
-        lastTime = now;
-        lastScrollTop = scrollTop;
-        // Smooth velocity with exponential moving average
-        const smoothed = velocityEMARef.current * EMA_ALPHA + velocity * (1 - EMA_ALPHA);
-        velocityEMARef.current = smoothed;
-        // Map smoothed velocity to overscan delta
-        const delta = Math.ceil(smoothed * OVERSCAN_FACTOR);
-        // Clamp overscan between base and max
-        const newOverscan = Math.min(OVERSCAN_BASE + delta, OVERSCAN_MAX);
-        setOverscan(newOverscan);
-
-        // --- Add debounced save on scroll ---
-        if (folderPath && rowHeightsRef.current.length > 0 && !isRestoringScrollRef.current) {
-          // Pass only scroll position to debounced save
-          debouncedSaveScroll(folderPath, scrollTop /*, rowHeightsRef.current, containerWidth */);
-        }
-        // --- End Add debounced save ---
-      });
-    };
-    container.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      container.removeEventListener('scroll', onScroll);
-      cancelAnimationFrame(frameId);
-      // --- Cancel debounced save on unmount ---
-      debouncedSaveScroll.cancel?.();
-      // --- End Cancel ---
-    };
-  }, [scrollContainerRef, folderPath, debouncedSaveScroll]);
-
   // Get the virtual items to render
   const virtualItems = rowVirtualizer.getVirtualItems();
+
   // --- End Virtualization Setup ---
 
   // --- Add Scroll Restoration Effect ---
   useLayoutEffect(() => {
     const scrollElement = scrollContainerRef.current;
-    // Apply scroll only AFTER data/layout seems ready and state is restored
-    // Check virtualItems.length > 0 ensures the list is somewhat rendered
-    // Check restoredState directly for scrollTop
-    if (scrollElement && restoredState?.scrollTop !== undefined && virtualItems.length > 0) {
-      // Check the flag before restoring
-      if (isRestoringScrollRef.current) {
-        scrollElement.scrollTop = restoredState.scrollTop;
-        // Crucially, unset the flag AFTER restoring scroll
-        setTimeout(() => {
+    // Try to restore scroll only after layout is stable
+    if (isRestoringScrollRef.current && restoredState && rowHeightsRef.current.length > 0) {
+      if (scrollElement) {
+        console.log(`Restoring scroll to: ${restoredState.scrollTop}`);
+        // Wrap scroll restoration in requestAnimationFrame for smoothness
+        requestAnimationFrame(() => {
+          scrollElement.scrollTop = restoredState.scrollTop;
+          // Reset the flag *after* applying the scroll
           isRestoringScrollRef.current = false;
-        }, 0);
+        });
+      } else {
+        isRestoringScrollRef.current = false; // Reset if element not found
       }
-    } else if (!restoredState) {
-      // If there's no state to restore, ensure the flag is false
-      isRestoringScrollRef.current = false;
     }
   }, [restoredState, scrollContainerRef, virtualItems, folderPath]); // Depend on restored state, ref, virtual items, and folderPath
   // --- End Scroll Restoration Effect ---
@@ -667,11 +646,11 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
                   isLastRow={virtualItem.index === groupedRows.length - 1}
                   rowHeight={row.height}
                   groupedImages={groupedImages}
-                  processedImages={processedImages}
-                  imageProcessor={imageProcessor}
+                  workerPool={workerPool}
                   gap={gapSize} // Use calculated gapSize
                   containerWidth={containerWidth}
                   onImageHover={handleImageHover}
+                  onImageLoadError={handleImageLoadError}
                 />
               </div>
             );
@@ -738,60 +717,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     }
     // Run only when images are first loaded or getImageUrl changes
   }, [images, getImageUrl, setDominantColors]);
-
-  // Reset prefetch flag when folder changes
-  useEffect(() => {
-    prefetchTriggeredRef.current = false;
-  }, [folderPath]);
-
-  // Observe the sentinel element for prefetch
-  useEffect(() => {
-    const el = prefetchRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => entry.isIntersecting && setIsPrefetchVisible(true),
-      { root: scrollContainerRef.current, rootMargin: '200px' }
-    );
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-    };
-  }, [scrollContainerRef]);
-
-  // When sentinel enters view, prefetch next folder images
-  useEffect(() => {
-    if (isPrefetchVisible && !prefetchTriggeredRef.current && foldersList?.length) {
-      const idx = foldersList.findIndex(f => f.name === folderPath);
-      const nextFolder = foldersList[idx + 1]?.name;
-      if (nextFolder) {
-        queryClient
-          .fetchQuery({
-            queryKey: ['images', nextFolder],
-            queryFn: () => getImages(nextFolder),
-          })
-          .then(nextImages => {
-            const batch = nextImages.map(img => ({
-              id: img.id,
-              src: img.src,
-              width: Math.ceil(containerWidth),
-              height: Math.ceil(layoutMetrics.estimatedRowHeightFallback),
-            }));
-            if (batch.length) {
-              imageProcessor.postMessage({ action: 'processBatch', images: batch });
-            }
-          });
-        prefetchTriggeredRef.current = true;
-      }
-    }
-  }, [
-    isPrefetchVisible,
-    foldersList,
-    folderPath,
-    containerWidth,
-    layoutMetrics.estimatedRowHeightFallback,
-    queryClient,
-    imageProcessor,
-  ]);
 
   // --- Render Skeletons --- (Copied from pasted version, uses layoutMetrics)
   const renderSkeletons = useCallback(() => {
@@ -881,11 +806,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       }}
     >
       <AuraBackground />
-      <div className={styles.feed}>
-        {renderContent()}
-        {/* Sentinel for prefetching next folder */}
-        <div ref={prefetchRef} style={{ width: '100%', height: '1px' }} />
-      </div>
+      <div className={styles.feed}>{renderContent()}</div>
 
       <Lightbox
         open={lightboxIndex !== -1}

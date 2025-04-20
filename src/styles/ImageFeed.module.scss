@@ -255,3 +255,10 @@
     opacity: 1;
   }
 }
+
+.imageFeedContainer {
+  scroll-behavior: smooth;
+  overflow-y: auto;
+  height: 100%;
+  width: 100%;
+}

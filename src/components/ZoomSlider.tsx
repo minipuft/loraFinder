@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
 import { motion, useAnimation } from 'framer-motion';
-import { useSpring, animated } from 'react-spring';
+import React, { useEffect, useState } from 'react';
+import { animated, useSpring } from 'react-spring';
 
 // Define the props interface for the ZoomSlider component
 interface ZoomSliderProps {
