@@ -1,4 +1,4 @@
-import { ImageInfo, ViewMode } from '../types';
+import { ImageInfo, ViewMode } from '../types/index.js';
 
 // Constants
 export const MIN_IMAGE_WIDTH = 200;

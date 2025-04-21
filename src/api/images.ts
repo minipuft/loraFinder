@@ -1,8 +1,21 @@
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { ImageInfo } from '../types.js';
+import { createCacheProvider } from '../server/lib/cache';
+import { ImageInfo } from '../types/index.js';
 import { getImageDimensions, isImageFile } from '../utils/imageUtils.js';
+
+// Define the structure for cached dimensions
+interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
+// Create a cache instance specifically for image dimensions
+const dimensionsCache = createCacheProvider<ImageDimensions>('lru', {
+  maxItems: parseInt(process.env.SERVER_LRU_MAX_ITEMS || '1000', 10), // Higher limit for dimensions
+  ttlMs: parseInt(process.env.SERVER_LRU_TTL_MS || '3600000', 10), // 1 hour default TTL
+});
 
 const router = express.Router();
 
@@ -65,15 +78,25 @@ async function getImages(folder: string): Promise<ImageInfo[]> {
     try {
       const id = fileName.replace(/\.[^/.]+$/, '');
       const filePath = path.join(imagesDirectory, fileName);
-      const { width, height } = await getImageDimensions(filePath);
+      const cacheKey = `dimensions:${filePath}`; // Cache key based on full file path
+
+      // 1. Check cache for dimensions
+      let dimensions = await dimensionsCache.get(cacheKey);
+
+      if (!dimensions) {
+        // 2. Cache miss: Get dimensions from disk
+        dimensions = await getImageDimensions(filePath);
+        // 3. Store in cache
+        await dimensionsCache.set(cacheKey, dimensions);
+      }
 
       return {
         id,
         src: `/api/image?folder=${encodeURIComponent(folder)}&file=${encodeURIComponent(fileName)}`,
         alt: fileName,
         title: fileName,
-        width,
-        height,
+        width: dimensions.width, // Use cached or fetched dimensions
+        height: dimensions.height, // Use cached or fetched dimensions
       } satisfies ImageInfo;
     } catch (error) {
       console.error(`Error processing image ${fileName}:`, error);

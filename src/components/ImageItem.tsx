@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import React, { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ColorContext } from '../contexts/ColorContext';
 import styles from '../styles/ImageItem.module.scss';
-import { ImageInfo } from '../types.js';
+import { ImageInfo } from '../types/index.js';
 import AnimationSystem from '../utils/AnimationSystem';
 import { truncateImageTitle } from '../utils/stringUtils.js';
 import WorkerPool from '../workers/workerPool';

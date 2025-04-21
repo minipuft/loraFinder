@@ -51,12 +51,14 @@
 
 .viewToggleButton {
   @apply bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ease-in-out;
-  backdrop-filter: blur(5px);
+  // backdrop-filter: blur(5px); /* Performance test: Kept commented out */
   background-color: rgba(59, 130, 246, 0.5);
+  will-change: box-shadow, transform; /* Hint for optimization */
 
   &:hover {
     @apply bg-blue-600;
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+    /* Simpler shadow for testing */
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.6);
   }
 }
 

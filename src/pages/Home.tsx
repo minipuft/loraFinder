@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import Layout from '../components/Layout.js';
 import MainContent from '../components/MainContent.js';
 // import { getFolders, getImages } from '../lib/api.js'; // getFolders no longer needed here
-import { ViewMode } from '../types.js';
+import { ViewMode } from '../types/index.js';
 // Import the settings utilities
 import { getHomeDirectory } from '../utils/settings.js';
 

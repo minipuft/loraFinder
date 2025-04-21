@@ -1,6 +1,5 @@
 import { motion, useAnimation } from 'framer-motion';
 import React, { useEffect, useState } from 'react';
-import { animated, useSpring } from 'react-spring';
 
 // Define the props interface for the ZoomSlider component
 interface ZoomSliderProps {
@@ -13,23 +12,10 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
   const [isDragging, setIsDragging] = useState(false);
   const controls = useAnimation();
 
-  const sliderSpring = useSpring({
-    width: `${((zoom - 0.5) / 1.5) * 100}%`,
-    config: {
-      tension: 300,
-      friction: 10,
-      precision: 0.01,
-    },
-  });
-
-  const glowSpring = useSpring({
-    opacity: isDragging ? 1 : 0.6,
-    scale: isDragging ? 1.1 : 1,
-    config: {
-      tension: 300,
-      friction: 20,
-    },
-  });
+  // compute animated values manually for Framer Motion
+  const sliderWidth = `${((zoom - 0.5) / 1.5) * 100}%`;
+  const glowOpacity = isDragging ? 1 : 0.6;
+  const glowScale = isDragging ? 1.1 : 1;
 
   useEffect(() => {
     controls.start({
@@ -76,9 +62,8 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
             strokeLinejoin="round"
           />
         </motion.svg>
-        <animated.div
+        <motion.div
           style={{
-            ...glowSpring,
             position: 'absolute',
             top: '50%',
             left: '50%',
@@ -88,17 +73,18 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none',
           }}
+          animate={{ opacity: glowOpacity, scale: glowScale }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         />
       </motion.div>
 
       {/* Slider track */}
       <div className="relative flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-        <animated.div
+        <motion.div
           className="absolute top-0 left-0 h-full bg-blue-500 rounded-full"
-          style={{
-            ...sliderSpring,
-            boxShadow: '0 0 10px rgba(59,130,246,0.5)',
-          }}
+          style={{ boxShadow: '0 0 10px rgba(59,130,246,0.5)' }}
+          animate={{ width: sliderWidth }}
+          transition={{ type: 'spring', stiffness: 300, damping: 10, precision: 0.01 }}
         />
         <input
           type="range"
@@ -140,9 +126,8 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
             strokeLinejoin="round"
           />
         </motion.svg>
-        <animated.div
+        <motion.div
           style={{
-            ...glowSpring,
             position: 'absolute',
             top: '50%',
             left: '50%',
@@ -152,6 +137,8 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none',
           }}
+          animate={{ opacity: glowOpacity, scale: glowScale }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         />
       </motion.div>
     </motion.div>

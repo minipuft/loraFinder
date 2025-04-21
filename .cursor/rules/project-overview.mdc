@@ -1,0 +1,22 @@
+---
+description: Project Goal
+globs: 
+alwaysApply: false
+---
+# Project Overview: MediaFlow
+
+## 1. Vision Statement
+
+To provide a fast, efficient, and visually appealing web application for managing, browsing, and viewing large collections of image files, particularly focusing on previews for LORA and related AI model files.
+
+## 2. Main Goals
+
+- **Efficient Image Browsing:** Allow users to quickly navigate through hierarchical folder structures and view image thumbnails.
+- **High-Performance Viewing:** Implement fast loading times using modern web technologies, SSR, caching, and lazy loading.
+- **Advanced Search:** Enable users to find specific images using full-text search across metadata or filenames.
+- **Robust Backend:** Utilize a stable Express backend for reliable file system interaction and image processing.
+- **Developer Experience:** Maintain a clean, well-structured codebase using Vite, TypeScript, and modern React practices.
+
+## 3. High-Level Explanation
+
+MediaFlow is a full-stack application combining a React frontend (built with Vite and utilizing SSR) and an Express backend. The frontend handles user interaction, displaying folders and images in a responsive masonry layout, leveraging React Query for data fetching. The backend interacts with the file system specified by the `MAIN_DIRECTORY` environment variable, serves API endpoints for image and folder data, performs image processing using Sharp, and handles SSR requests.

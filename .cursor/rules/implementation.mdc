@@ -1,0 +1,55 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Implementation Details
+
+## 1. Development Approach
+
+- **Frameworks:** React 18 (Frontend), Express (Backend).
+- **Build Tool:** Vite is used for both client and server builds, enabling features like Hot Module Replacement (HMR) during development and optimized bundles for production. Vite also facilitates Server-Side Rendering (SSR).
+- **Language:** TypeScript is used across the entire project (frontend and backend) for type safety and improved developer experience.
+- **Styling:** SCSS Modules are used for component-scoped styles, complemented by Tailwind CSS for utility classes and rapid prototyping.
+- **State Management:** React Query handles server state, caching, and synchronization. Client-side UI state is managed within components using React hooks (`useState`, `useReducer`) or potentially shared via Context API (`src/contexts/`).
+- **API Communication:** The frontend communicates with the backend Express API using `axios` (or native `fetch`), likely managed through abstractions in `src/api/` and integrated with React Query.
+- **Server:** The Express server (`server.ts`) handles:
+  - Serving API endpoints under `/api`.
+  - Serving static assets from the `public/` directory.
+  - Integrating with Vite middleware for development and SSR.
+  - Rendering the React application server-side via `src/entry-server.tsx`.
+
+## 2. Coding Standards
+
+- **Formatting:** Prettier is used for automatic code formatting. Configuration is likely in `prettier.config.js` or `.prettierrc.json`.
+- **Linting:** ESLint is used for identifying potential code issues and enforcing style guidelines. Configuration is likely in `.eslintrc.js` or `.eslintrc.cjs`.
+- **TypeScript:** Strict mode (`"strict": true` in `tsconfig.json`) is enabled. Follow TypeScript best practices for type definitions and usage.
+- **Naming Conventions:** Follow standard JavaScript/TypeScript naming conventions (e.g., camelCase for variables/functions, PascalCase for components/classes/types).
+- **Component Structure:** Keep components modular and focused on a single responsibility. Utilize `src/components/` for reusable UI elements and `src/pages/` for page-level views.
+- **SCSS:** Use SCSS Modules (`*.module.scss`) for component styles to avoid global scope conflicts.
+- **Commits:** Follow the Conventional Commits specification, enforced by `commitlint.config.js`.
+
+## 3. Technical Guidelines
+
+- **Environment Variables:** Use `.env` files for configuration (e.g., `VITE_PORT`, `VITE_HOST`, `MAIN_DIRECTORY`). Access them using `process.env` on the server and `import.meta.env` on the Vite client.
+- **Error Handling:** Implement consistent error handling for API calls (client-side) and server-side operations (API routes, file system access).
+- **SSR Considerations:** Ensure components are SSR-compatible. Avoid direct DOM manipulation outside of `useEffect` hooks. Be mindful of code that relies solely on browser APIs during server rendering.
+- **Dependencies:** Keep dependencies up-to-date. Use `npm install` for adding dependencies. Validate dependencies using `npm run validate:deps`.
+- **Security:** Sanitize user inputs, validate data using libraries like Zod, be mindful of file system access permissions, and avoid exposing sensitive information.
+
+## 4. Caching Strategy
+
+- **Client-Side:**
+  - **React Query:** Manages caching of server state (API responses) based on query keys and configurable stale/cache times.
+  - **IndexedDB (`idb`):** Used for persistent client-side storage, specifically for remembering UI state like scroll positions (`src/lib/cache/feedStateCache.ts`).
+- **Server-Side:**
+  - **LRU Cache (`lru-cache`):** An in-memory Least Recently Used (LRU) cache is implemented (`src/server/lib/cache/`) to store frequently accessed, computationally inexpensive data (e.g., image dimensions read from disk).
+    - **Implementation:** Uses a common `CacheProvider` interface (`src/server/lib/cache/types.ts`), an LRU provider (`src/server/lib/cache/providers/lruCache.ts`), and a factory function (`src/server/lib/cache/index.ts`).
+    - **Configuration:** Configurable via environment variables (`SERVER_LRU_MAX_ITEMS`, `SERVER_LRU_TTL_MS`).
+    - **Goal:** Reduce redundant disk I/O and improve response times for repeated requests.
+  - **Other (Potential):** `node-cache` might be used for other server-side caching needs if LRU semantics are not required.
+
+- **Error Handling:** Implement consistent error handling for API calls (client-side) and server-side operations (API routes, file system access).
+- **SSR Considerations:** Ensure components are SSR-compatible. Avoid direct DOM manipulation outside of `useEffect` hooks. Be mindful of code that relies solely on browser APIs during server rendering.
+- **Dependencies:** Keep dependencies up-to-date. Use `npm install` for adding dependencies. Validate dependencies using `npm run validate:deps`.
+- **Security:** Sanitize user inputs, validate data using libraries like Zod, be mindful of file system access permissions, and avoid exposing sensitive information.

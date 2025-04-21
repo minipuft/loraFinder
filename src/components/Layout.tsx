@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ViewMode } from '../types.js';
+import { ViewMode } from '../types/index.js';
 import MainContent from './MainContent.js';
 import Navbar from './Navbar.js';
 import Sidebar from './Sidebar.js';

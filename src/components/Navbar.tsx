@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import React, { useEffect, useRef } from 'react';
 import styles from '../styles/Navbar.module.scss';
-import { ViewMode } from '../types.js';
+import { ViewMode } from '../types/index.js';
 import CurrentDirectoryButton from './CurrentDirectoryButton';
 import SearchBar from './SearchBar';
 import ZoomSlider from './ZoomSlider';

@@ -19,7 +19,7 @@ import 'yet-another-react-lightbox/plugins/thumbnails.css';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 import styles from '../styles/ImageFeed.module.scss';
-import { ImageInfo, ViewMode } from '../types.js';
+import { ImageInfo, ViewMode } from '../types/index.js';
 import { truncateImageTitle } from '../utils/stringUtils.js';
 import { ImageHoverData } from './ImageItem.js';
 import ImageRow from './ImageRow.js';
@@ -27,6 +27,7 @@ import ImageSkeleton from './ImageSkeleton.js';
 // import Lottie from 'react-lottie';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { FastAverageColor } from 'fast-average-color';
+import { default as lodashDebounce } from 'lodash/debounce';
 import { ColorContext } from '../contexts/ColorContext';
 import { useFolderImages } from '../hooks/query/useFolderImages';
 import useWindowSize from '../hooks/useWindowSize.js';
@@ -83,7 +84,7 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
     }
   };
 
-  return debounced;
+  return debounced as F & { cancel: () => void };
 }
 
 // Define the props interface for ImageFeed component
@@ -133,20 +134,46 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const facRef = useRef<FastAverageColor | null>(null);
   const lastProcessedRowIndexRef = useRef<number | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [overscan, setOverscan] = useState<number>(5);
   const [restoredState, setRestoredState] = useState<ScrollState | null>(null);
   const previousFolderPathRef = useRef<string | null>(null);
   const rowHeightsRef = useRef<number[]>([]);
   const isRestoringScrollRef = useRef(false);
   const velocityEMARef = useRef(0); // For smoothing velocity readings
-  const OVERSCAN_BASE = 5;
-  const OVERSCAN_MAX = 20;
-  const EMA_ALPHA = 0.8; // smoothing factor: higher => smoother
-  const OVERSCAN_FACTOR = 15; // map velocity to overscan range
+  const OVERSCAN_BASE = 3; // Slightly reduced base
+  const OVERSCAN_MAX = 15; // Slightly reduced max
+  const EMA_ALPHA = 0.2; // More smoothing (lower alpha = more smoothing)
+  const OVERSCAN_FACTOR = 10; // Adjust mapping sensitivity
   const workerPool = useMemo(() => WorkerPool.getInstance(), []);
+
+  // --- Add missing useState declaration --- >
+  const [dynamicOverscan, setDynamicOverscan] = useState(OVERSCAN_BASE);
+  // --- End missing useState declaration --- >
 
   // State to track failed image IDs
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+
+  // --- Debouncing Logic for isGrouped ---
+  const [debouncedIsGrouped, setDebouncedIsGrouped] = useState(isGrouped);
+
+  // Use the renamed lodashDebounce here
+  const updateDebouncedGrouped = useCallback(
+    lodashDebounce((newValue: boolean) => {
+      setDebouncedIsGrouped(newValue);
+      console.log('[ImageFeed] Applying debounced isGrouped:', newValue);
+    }, 300),
+    []
+  );
+
+  // Effect to call the debounced function when the raw prop changes
+  useEffect(() => {
+    updateDebouncedGrouped(isGrouped);
+
+    // Cleanup function to cancel any pending debounced call
+    return () => {
+      updateDebouncedGrouped.cancel();
+    };
+  }, [isGrouped, updateDebouncedGrouped]);
+  // --- End Debouncing Logic ---
 
   // Callback to report image load errors
   const handleImageLoadError = useCallback((imageId: string) => {
@@ -287,7 +314,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     setLightboxImages([]);
     lastProcessedRowIndexRef.current = null;
     setDominantColors([]);
-    setFailedImageIds(new Set()); // Reset failed IDs on folder change
+    setFailedImageIds(new Set());
     console.log(
       `ImageFeed: ${folderPath ? 'Folder' : 'ViewMode/Group'} changed, cancelling pending tasks.`
     );
@@ -325,7 +352,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
           containerWidth: newWidth,
           zoom,
           viewMode,
-          isGrouped,
+          isGrouped: debouncedIsGrouped,
         };
         const layout = calculateLayout(config);
         // Update columns directly here if needed, or rely on layoutMetrics memo
@@ -334,7 +361,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       }
       return prevWidth; // Return previous width if no change
     });
-  }, [zoom, viewMode, isGrouped]); // Dependencies are things used *inside* the function
+  }, [zoom, viewMode, debouncedIsGrouped, updateDebouncedGrouped]); // Dependencies are things used *inside* the function
 
   // Use useLayoutEffect for the *initial* measurement before paint
   useLayoutEffect(() => {
@@ -371,7 +398,9 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
 
   // Modified groupedImages calculation (uses filtered images)
   const groupedImages = useMemo(() => {
+    console.time('groupedImages calculation'); // Start perf timer
     if (!Array.isArray(images) || images.length === 0) {
+      console.timeEnd('groupedImages calculation');
       return [];
     }
 
@@ -385,29 +414,51 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
         image.height > 0
     );
 
-    if (!isGrouped) {
-      return validImages.map(image => ({
+    if (!debouncedIsGrouped) {
+      const result = validImages.map(image => ({
         key: image.id,
         images: [image],
         isCarousel: false,
       }));
+      console.timeEnd('groupedImages calculation');
+      return result;
     }
 
+    // --- Optimized Grouping Logic ---
+    // 1. Pre-compute processed titles
+    console.time('groupedImages - precompute titles');
+    const processedTitles = new Map<string, string>();
+    validImages.forEach(image => {
+      // Store by image.id -> processedTitle
+      processedTitles.set(image.id, truncateImageTitle(image.alt));
+    });
+    console.timeEnd('groupedImages - precompute titles');
+
+    // 2. Group using pre-computed titles
+    console.time('groupedImages - grouping loop');
     const groups: { [key: string]: ImageInfo[] } = {};
     validImages.forEach(image => {
-      const processedTitle = truncateImageTitle(image.alt);
+      const processedTitle = processedTitles.get(image.id) || 'Untitled'; // Get pre-computed title
       if (!groups[processedTitle]) {
         groups[processedTitle] = [];
       }
       groups[processedTitle].push(image);
     });
+    console.timeEnd('groupedImages - grouping loop');
 
-    return Object.entries(groups).map(([key, group]) => ({
+    // 3. Convert groups object to array
+    console.time('groupedImages - convert to array');
+    const result = Object.entries(groups).map(([key, group]) => ({
       key,
       images: group,
       isCarousel: group.length > 1,
     }));
-  }, [images, isGrouped]);
+    console.timeEnd('groupedImages - convert to array');
+    // --- End Optimized Grouping Logic ---
+
+    console.timeEnd('groupedImages calculation'); // End overall perf timer
+    return result;
+  }, [images, debouncedIsGrouped]); // Dependencies remain the same
 
   // Enhanced groupedRows calculation (uses filtered images via groupedImages)
   const groupedRows = useMemo(() => {
@@ -464,6 +515,52 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     [groupedImages, setLightboxImages, setLightboxIndex] // Add state setters to dependencies
   );
 
+  // --- Scroll Velocity and Dynamic Overscan --- >
+  const lastScrollTopRef = useRef(0);
+  const lastScrollTimeRef = useRef(performance.now());
+
+  const handleScroll = useCallback(() => {
+    const scrollElement = scrollContainerRef.current;
+    if (!scrollElement) return;
+
+    const now = performance.now();
+    const scrollTop = scrollElement.scrollTop;
+    const timeDelta = now - lastScrollTimeRef.current;
+    const scrollDelta = scrollTop - lastScrollTopRef.current;
+
+    if (timeDelta > 10) {
+      // Avoid division by zero or tiny intervals
+      const velocity = Math.abs(scrollDelta) / timeDelta; // Pixels per millisecond
+      // Update EMA velocity
+      velocityEMARef.current = EMA_ALPHA * velocity + (1 - EMA_ALPHA) * velocityEMARef.current;
+
+      // Calculate dynamic overscan based on smoothed velocity
+      const calculatedOverscan =
+        OVERSCAN_BASE +
+        Math.min(velocityEMARef.current * OVERSCAN_FACTOR, OVERSCAN_MAX - OVERSCAN_BASE);
+      setDynamicOverscan(Math.round(calculatedOverscan));
+
+      // Update refs for next calculation
+      lastScrollTopRef.current = scrollTop;
+      lastScrollTimeRef.current = now;
+
+      // Trigger debounced save (if still needed)
+      debouncedSaveScroll(folderPath, scrollTop);
+    }
+  }, [scrollContainerRef, folderPath, debouncedSaveScroll]);
+
+  // Attach scroll listener
+  useEffect(() => {
+    const scrollElement = scrollContainerRef.current;
+    if (scrollElement) {
+      // Use throttle for the scroll handler to limit frequency
+      const throttledScrollHandler = throttle(handleScroll, 100); // Throttle to ~10fps
+      scrollElement.addEventListener('scroll', throttledScrollHandler);
+      return () => scrollElement.removeEventListener('scroll', throttledScrollHandler);
+    }
+  }, [scrollContainerRef, handleScroll]);
+  // --- End Scroll Velocity Logic --- >
+
   // --- Virtualization Setup ---
   const rowVirtualizer = useVirtualizer({
     count: groupedRows.length,
@@ -476,7 +573,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       },
       [groupedRows, layoutMetrics.estimatedRowHeightFallback, layoutMetrics.gapSize, viewMode]
     ),
-    overscan,
+    overscan: dynamicOverscan, // Use dynamic overscan state
   });
 
   // Remeasure rows whenever zoom, containerWidth, row count, row height fallback, gap size, view mode, or grouping changes
@@ -489,7 +586,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     layoutMetrics.estimatedRowHeightFallback,
     layoutMetrics.gapSize,
     viewMode,
-    isGrouped,
+    debouncedIsGrouped,
     folderPath,
   ]);
 

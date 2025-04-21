@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ImageInfo, FolderInfo } from '../types.js';
+import { FolderInfo, ImageInfo } from '../types/index.js';
 
 const api = axios.create({
   baseURL: '/api', // Assuming your API routes are under /api

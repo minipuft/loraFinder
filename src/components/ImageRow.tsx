@@ -1,7 +1,7 @@
 import { motion, useAnimation, Variants } from 'framer-motion';
-import React, { memo, useRef } from 'react';
+import React, { useRef } from 'react';
 import styles from '../styles/ImageRow.module.scss';
-import { ImageInfo } from '../types.js';
+import { ImageInfo } from '../types/index.js';
 // import { createImageProcessor } from '../workers/imageProcessor'; // No longer needed directly
 import WorkerPool from '../workers/workerPool'; // Import WorkerPool type
 import ImageItem, { ImageHoverData } from './ImageItem.js';
@@ -150,5 +150,5 @@ const ImageRow: React.FC<ImageRowProps> = ({
   );
 };
 
-// WRAP EXPORT IN React.memo
-export default memo(ImageRow);
+// Export the memoized component
+export default React.memo(ImageRow);

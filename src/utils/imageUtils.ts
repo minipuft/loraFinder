@@ -1,4 +1,4 @@
-import { ImageInfo } from '@/types.js';
+import { ImageInfo } from '@/types/index.js';
 import path from 'path';
 import sharp from 'sharp';
 

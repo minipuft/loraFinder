@@ -1,0 +1,51 @@
+---
+description: This document outlines the core features of the MediaFlow application.
+globs: 
+alwaysApply: false
+---
+# Features
+
+This document outlines the core features of the MediaFlow application.
+
+## 1. Image & Folder Management
+
+- **Hierarchical Navigation:** Users can browse image files organized within a nested folder structure originating from the configured `MAIN_DIRECTORY`.
+- **Folder Data API:** The `/api/folders` endpoint provides data about folder contents.
+- **Image Data API:** The `/api/images`, `/api/image`, and `/api/image/[...params]` endpoints provide data for individual images or lists of images within folders.
+- **Upload Functionality:** Users can upload new image files via the `/api/upload` endpoint (specific UI implementation details may vary).
+
+## 2. Image Viewing
+
+- **Masonry Grid Layout:** Images are displayed in a responsive masonry grid, adapting to different screen sizes.
+- **Lazy Loading:** Images are loaded progressively as the user scrolls to improve initial load time and performance.
+- **SSR (Server-Side Rendering):** Initial page loads are rendered on the server for faster perceived performance and better SEO.
+- **Image Processing:** The backend uses Sharp for potential image processing tasks (e.g., thumbnail generation, although specific implementation details should be verified).
+- **Caching:** Client-side (potentially IDB or memory) and server-side (Node Cache) caching mechanisms are likely used to speed up repeated data access.
+
+## 3. Search
+
+- **Full-Text Search:** Users can search for images across all accessible folders using the `/api/search` endpoint.
+- **Search Results Display:** Search results are presented, likely within the same responsive layout.
+
+## 4. Performance & Optimization
+
+- **Vite Build System:** Utilizes Vite for fast development server startup and optimized production builds.
+- **React Query:** Manages server state, caching, and background updates efficiently on the client.
+- **Code Splitting:** Vite likely handles automatic code splitting for optimized JavaScript loading.
+- **Web Workers:** Potential use of web workers (`src/workers/`) for offloading intensive tasks (e.g., client-side processing if implemented).
+
+## 5. Development & Tooling
+
+- **TypeScript:** Provides static typing for improved code quality and maintainability.
+- **SCSS Modules + Tailwind CSS:** Offers a flexible and powerful styling solution.
+- **ESLint & Prettier:** Enforce consistent code style and quality.
+- **Commitlint:** Enforces conventional commit message format.
+- **Husky & lint-staged:** Automate checks before commits.
+
+## Edge Cases & Business Rules
+
+- **File Access:** The application only has access to files within the `MAIN_DIRECTORY` specified in the environment variables.
+- **Error Handling:** Robust error handling should be implemented for API requests, file system operations, and image processing.
+- **Security:** File uploads should be validated (e.g., file type, size limits). API endpoints should be secured against unauthorized access if applicable.
+- **Large Directories:** Performance considerations for very large directories or large numbers of images need to be addressed (e.g., pagination, efficient querying).
+- **Unsupported File Types:** How the application handles non-image files or unsupported image formats needs definition.

@@ -1,6 +1,6 @@
 import React, { RefObject } from 'react';
 import styles from '../styles/ImageViewer.module.scss';
-import { ViewMode } from '../types.js';
+import { ViewMode } from '../types/index.js';
 import ImageFeed from './ImageFeed.js';
 
 // Define the props interface for the ImageViewer component

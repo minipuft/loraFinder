@@ -1,0 +1,62 @@
+---
+description: This document describes typical user journeys through the MediaFlow application.
+globs: 
+alwaysApply: false
+---
+# User Flow
+
+This document describes typical user journeys through the MediaFlow application.
+
+## 1. Browsing Folders and Images
+
+1.  **User Action:** Accesses the application URL.
+2.  **System Response:**
+    - Server receives the request.
+    - SSR renders the initial view (likely the root of `MAIN_DIRECTORY` or a default page).
+    - HTML is sent to the client.
+    - Client-side JavaScript hydrates the React application.
+    - Initial folder contents (subfolders and image thumbnails) are displayed, potentially fetched via `/api/folders` or `/api/images`.
+3.  **User Action:** Clicks on a subfolder.
+4.  **System Response:**
+    - Client navigates to the new folder view (URL might update).
+    - Data for the new folder's contents is fetched from the API (e.g., `/api/images?folder=<path>`).
+    - The image grid updates to show the contents of the selected subfolder.
+5.  **User Action:** Scrolls down the page.
+6.  **System Response:**
+    - If more images exist in the current folder, lazy loading or infinite scroll triggers.
+    - Additional image data is fetched from the API (potentially with pagination parameters).
+    - New images are added to the grid.
+
+## 2. Viewing an Image in Detail
+
+1.  **User Action:** Clicks on an image thumbnail in the grid.
+2.  **System Response:**
+    - A lightbox or detail view opens, displaying the full-resolution image (or a larger preview).
+    - Additional metadata might be displayed, potentially fetched via `/api/image/<id>` or included in the initial image list data.
+3.  **User Action:** Navigates between images within the lightbox (if applicable, using arrows).
+4.  **System Response:** The lightbox updates to show the next/previous image.
+5.  **User Action:** Closes the lightbox/detail view.
+6.  **System Response:** Returns to the image grid view.
+
+## 3. Searching for Images
+
+1.  **User Action:** Enters a query into a search bar and submits.
+2.  **System Response:**
+    - A request is sent to the `/api/search?query=<term>` endpoint.
+    - The backend searches the file system based on the query.
+    - The API returns a list of matching images.
+    - The UI updates to display the search results, likely in the masonry grid.
+
+## 4. Uploading an Image (Conceptual)
+
+_(Note: Assumes an upload UI exists)_
+
+1.  **User Action:** Selects an image file using a file input or drag-and-drop area.
+2.  **System Response:**
+    - Client-side validation (file type, size) might occur.
+3.  **User Action:** Initiates the upload.
+4.  **System Response:**
+    - A POST request containing the file data is sent to the `/api/upload` endpoint (potentially with a target folder).
+    - The backend receives the file, validates it, and saves it to the appropriate location within `MAIN_DIRECTORY`.
+    - The API returns a success or error response.
+    - The UI might update to reflect the successful upload (e.g., adding the new image to the grid if in the current view).

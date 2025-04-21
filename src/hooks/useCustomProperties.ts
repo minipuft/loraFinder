@@ -9,8 +9,6 @@ export function useCustomProperties() {
 
       document.documentElement.style.setProperty(CUSTOM_PROPERTIES.MOUSE_X, `${mouseX}px`);
       document.documentElement.style.setProperty(CUSTOM_PROPERTIES.MOUSE_Y, `${mouseY}px`);
-
-      console.log(`Mouse event: x=${mouseX}, y=${mouseY}, target=${e.target}`);
     }
 
     function updateScrollProperty() {

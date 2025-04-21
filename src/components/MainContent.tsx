@@ -1,5 +1,5 @@
 import React from 'react';
-import { ViewMode } from '../types.js';
+import { ViewMode } from '../types/index.js';
 import ImageViewer from './ImageViewer.js';
 
 // Define the props interface for the MainContent component

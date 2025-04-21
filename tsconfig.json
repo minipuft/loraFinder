@@ -12,14 +12,16 @@
     "strict": true,
     // Ensure consistent casing in file names
     "forceConsistentCasingInFileNames": true,
-    // Do not emit outputs
-    "noEmit": false,
+    // Do not emit outputs (Vite handles emission)
+    "noEmit": true,
+    // Don't generate declaration files
+    "declaration": false,
     // Enable interoperability between CommonJS and ES Modules
     "esModuleInterop": true,
     // Specify module code generation
     "module": "ESNext",
-    // Specify module resolution strategy
-    "moduleResolution": "node",
+    // Specify module resolution strategy (recommended for bundlers like Vite)
+    "moduleResolution": "Bundler",
     // Enable importing .json files
     "resolveJsonModule": true,
     // Ensure each file can be safely transpiled without relying on other imports
@@ -34,8 +36,9 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "outDir": "./dist",
-    "rootDir": ".",
+    // outDir is not used when noEmit is true
+    // "outDir": "./dist",
+    // rootDir removed to avoid potential conflicts
     "sourceMap": true,
     "allowSyntheticDefaultImports": true,
     "typeRoots": ["./node_modules/@types", "./src/types"]
@@ -44,6 +47,6 @@
     "esm": true,
     "experimentalSpecifierResolution": "node"
   },
-  "include": ["src/**/*", "vite.config.ts", "server.ts"],
+  "include": ["src/**/*", "vite.config.*.ts", "server.ts"],
   "exclude": ["node_modules"]
 }

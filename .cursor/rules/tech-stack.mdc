@@ -1,0 +1,73 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Technology Stack
+
+This document lists the key technologies, frameworks, and libraries used in the MediaFlow project.
+
+## Frontend
+
+- **Framework/Library:** React 18 (`react`, `react-dom`)
+- **Build Tool & Dev Server:** Vite (`vite`, `@vitejs/plugin-react`)
+- **Language:** TypeScript (`typescript`)
+- **Routing:** Handled implicitly by the component structure within `src/pages/` and potentially custom routing logic, integrated with SSR.
+- **State Management:** React Query (`@tanstack/react-query`) for server state; React Hooks/Context API for UI state.
+- **Data Fetching:** Axios (`axios`) or native `fetch`, integrated with React Query.
+- **Styling:**
+  - SCSS (`sass`)
+  - SCSS Modules
+  - Tailwind CSS (`tailwindcss`, `postcss`, `autoprefixer`)
+- **UI Components/Libraries:**
+  - Framer Motion (`framer-motion`) for animations.
+  - Tabler Icons (`@tabler/icons-react`)
+  - React Icons (`react-icons`)
+  - Masonry Layouts (e.g., `react-masonry-css`, `react-masonry-list`, `react-responsive-masonry`)
+  - Lightbox (e.g., `yet-another-react-lightbox`)
+  - Dropzone (`react-dropzone`)
+  - Infinite Scroll (`react-infinite-scroll-component`)
+  - Intersection Observer (`react-intersection-observer`)
+  - Slider/Carousel (`react-slick`, `slick-carousel`)
+  - Virtualization (`@tanstack/react-virtual`)
+  - Average Color (`fast-average-color`)
+  - Lottie Animations (`lottie-react`)
+  - Classnames (`classnames`)
+- **Client-side Caching:** IndexedDB (`idb` library)
+
+## Backend
+
+- **Framework:** Express (`express`)
+- **Language:** TypeScript (`typescript`, run via `tsx` in development)
+- **Image Processing:** Sharp (`sharp`)
+- **Server-Side Caching:** Node Cache (`node-cache`)
+- **Validation:** Zod (`zod`)
+- **File Uploads:** Formidable (`formidable`)
+- **Environment Variables:** Dotenv (`dotenv`)
+- **Utilities:** UUID (`uuid`), Image Size (`image-size`)
+
+## Development & Tooling
+
+- **Package Manager:** npm
+- **Version Control:** Git
+- **Linting:** ESLint (`eslint`, various plugins like `@typescript-eslint/eslint-plugin`, `eslint-plugin-react`, etc.)
+- **Formatting:** Prettier (`prettier`, `eslint-config-prettier`, `eslint-plugin-prettier`)
+- **Type Checking:** TypeScript (`tsc --noEmit`)
+- **Commit Message Linting:** Commitlint (`@commitlint/cli`, `@commitlint/config-conventional`)
+- **Git Hooks:** Husky (`husky`), Lint-staged (`lint-staged`)
+- **Build/Task Runners:** npm scripts, Concurrently (`concurrently`), Cross-env (`cross-env`)
+- **Module Resolution:** Vite TSConfig Paths (`vite-tsconfig-paths`)
+- **Dependency Management:** `depcheck`, `rimraf` (for cleaning `dist`)
+- **Circular Dependency Check:** Madge (`madge`)
+- **Vite Plugins:** `@vitejs/plugin-react`, `vite-plugin-checker`, `vite-tsconfig-paths`
+
+## Caching
+
+- **Client-Side Caching:** LRU cache providers including in-memory LRU cache (using `lru-cache` or custom implementation) and IndexedDB-backed LRU cache (`idb`).
+- **Server-Side Caching:** In-memory LRU cache implemented in `src/lib/cache/providers/memory.ts` or using an LRU cache library (e.g., `lru-cache`) integrated into the Express layer.
+- **Configuration:** Cache capacity and eviction settings controlled via `CLIENT_CACHE_SIZE` and `SERVER_CACHE_SIZE` environment variables.
+
+- **Module Resolution:** Vite TSConfig Paths (`vite-tsconfig-paths`)
+- **Dependency Management:** `depcheck`, `rimraf` (for cleaning `dist`)
+- **Circular Dependency Check:** Madge (`madge`)
+- **Vite Plugins:** `@vitejs/plugin-react`, `vite-plugin-checker`, `vite-tsconfig-paths`

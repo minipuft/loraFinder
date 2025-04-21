@@ -1,24 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { IntersectionOptions, useInView } from 'react-intersection-observer';
 
-export function useIntersectionObserver(options = {}) {
-  const [isIntersecting, setIsIntersecting] = useState(false);
-  const targetRef = useRef(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => {
-      setIsIntersecting(entry.isIntersecting);
-    }, options);
-
-    if (targetRef.current) {
-      observer.observe(targetRef.current);
-    }
-
-    return () => {
-      if (targetRef.current) {
-        observer.unobserve(targetRef.current);
-      }
-    };
-  }, [options]);
-
-  return [targetRef, isIntersecting];
+/**
+ * Wraps react-intersection-observer's useInView hook.
+ * Returns [ref, inView, entry], supporting configuration options
+ */
+export function useIntersectionObserver(
+  options: IntersectionOptions = {}
+): ReturnType<typeof useInView> {
+  return useInView(options);
 }

@@ -23,7 +23,7 @@
       "@server/*": ["server/*"]
     },
     "sourceMap": true,
-    "types": ["node", "webgl2", "jest", "vite/client"],
+    "types": ["node", "jest", "vite/client"],
     "typeRoots": ["./node_modules/@types", "./node_modules/vite/client"]
   },
   "include": [

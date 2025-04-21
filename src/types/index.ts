@@ -64,3 +64,16 @@ export interface NavbarProps {
   isGrouped: boolean;
   onGroupToggle: () => void;
 }
+
+export interface GroupedImageInfo {
+  id: string;
+  title: string;
+  images: ImageInfo[];
+}
+
+export enum ViewMode {
+  GRID = 'grid',
+  BANNER = 'banner',
+  MASONRY = 'masonry',
+  CAROUSEL = 'carousel',
+}
