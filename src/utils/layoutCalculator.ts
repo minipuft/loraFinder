@@ -141,8 +141,12 @@ export const calculateGapSize = (zoom: number): number => {
 const getAspectRatio = (image: ImageInfo): number => {
   let ratio = aspectRatioCache.get(image);
   if (!ratio) {
-    ratio = image.width / image.height;
-    aspectRatioCache.set(image, ratio);
+    if (image.width && image.height && image.width > 0 && image.height > 0) {
+      ratio = image.width / image.height;
+      aspectRatioCache.set(image, ratio);
+    } else {
+      ratio = 1; // Default fallback
+    }
   }
   return ratio;
 };
@@ -498,18 +502,20 @@ export const maintainAspectRatio = (
   containerWidth: number,
   containerHeight: number
 ): { width: number; height: number } => {
-  const aspectRatio = getAspectRatio(image);
+  const imgRatio = getAspectRatio(image);
   const containerRatio = containerWidth / containerHeight;
+  let width: number;
+  let height: number;
 
-  if (aspectRatio > containerRatio) {
-    return {
-      width: containerWidth,
-      height: Math.round(containerWidth / aspectRatio),
-    };
+  if (imgRatio > containerRatio) {
+    // Image is wider than container
+    width = containerWidth;
+    height = width / imgRatio;
+  } else {
+    // Image is taller than container
+    height = containerHeight;
+    width = height * imgRatio;
   }
 
-  return {
-    width: Math.round(containerHeight * aspectRatio),
-    height: containerHeight,
-  };
+  return { width: Math.round(width), height: Math.round(height) };
 };

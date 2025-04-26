@@ -1,400 +1,697 @@
+import * as Comlink from 'comlink'; // Import Comlink namespace for releaseProxy
+import { Remote, wrap } from 'comlink'; // Import wrap, Remote, and releaseProxy
 import { IDBPDatabase, openDB } from 'idb';
+import PQueue from 'p-queue'; // Import p-queue
+import { ImageInfo, ImageProcessorWorkerAPI, ProcessedImageCacheEntry } from '../types/index.js'; // Import the API type
+// Import the context update type
+import { ProcessedImageUpdate } from '../contexts/ImageProcessingContext';
 
-// Interface for the data stored in IndexedDB
-interface CachedProcessedImage {
-  id: string;
-  width?: number; // Dimensions at the time of caching
-  height?: number;
-  low?: string; // Blob URL for low-res
-  high?: string; // Blob URL for high-res
+// Remove the message interface - no longer needed
+// interface ImageProcessorMessage { ... }
+
+const DB_NAME = 'image-processor-cache';
+const STORE_NAME = 'processed-images';
+const DB_VERSION = 1;
+
+interface ImageProcessorOptions {
+  onImageProcessed?: (
+    id: string,
+    quality: 'low' | 'high',
+    imageUrl: string,
+    width: number,
+    height: number
+  ) => void;
+  onError?: (id: string, error: string) => void;
+  concurrency?: number; // Allow overriding concurrency
 }
 
-interface ImageProcessorMessage {
-  action: 'processImage' | 'processBatch' | 'imageProcessed' | 'cancel';
-  images?: { id: string; src: string; width: number; height: number }[];
-  id?: string;
-  processedImage?: string;
-  quality?: 'low' | 'high';
-  width?: number;
-  height?: number;
-  src?: string;
-}
+// --- Cache Management ---
+let dbPromise: Promise<IDBPDatabase> | null = null;
 
-type ProcessedImageCallback = (data: {
-  id: string;
-  quality: 'low' | 'high';
-  processedImage: string;
-}) => void;
-
-// Helper function (can be defined outside the class or as a private static method)
-const areDimensionsDifferent = (
-  cachedWidth: number | undefined,
-  cachedHeight: number | undefined,
-  requestedWidth: number,
-  requestedHeight: number,
-  threshold = 0.25 // Allow 25% difference in either dimension
-): boolean => {
-  if (
-    cachedWidth === undefined ||
-    cachedHeight === undefined ||
-    requestedWidth <= 0 || // Avoid division by zero
-    requestedHeight <= 0
-  ) {
-    return true; // Treat as different if cache dimensions missing or request invalid
+const getDb = (): Promise<IDBPDatabase> => {
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        }
+      },
+    });
   }
-  const widthDiff = Math.abs(cachedWidth - requestedWidth) / requestedWidth;
-  const heightDiff = Math.abs(cachedHeight - requestedHeight) / requestedHeight;
-
-  // console.log(`Dim Check (${cachedWidth}x${cachedHeight} vs ${requestedWidth}x${requestedHeight}): WDiff=${widthDiff.toFixed(2)}, HDiff=${heightDiff.toFixed(2)}`);
-
-  return widthDiff > threshold || heightDiff > threshold;
+  return dbPromise;
 };
 
 class ImageProcessor {
   private worker: Worker;
-  private db: IDBPDatabase<{
-    processedImages: { key: string; value: CachedProcessedImage };
-  }> | null = null;
-  private requestQueue: {
-    type: 'image' | 'batch';
-    payload: any;
-    callback?: ProcessedImageCallback;
-  }[] = [];
-  private isProcessing = false;
-  private isWorkerCancelled = false;
-  private callbacks: Map<string, ProcessedImageCallback[]> = new Map();
+  private proxy: Remote<ImageProcessorWorkerAPI>; // Store the Comlink proxy
+  private queue: PQueue; // Add queue instance
+  private onError?: (id: string, error: string) => void;
+  // Store AbortControllers for active requests
+  private activeRequests = new Map<string, AbortController>();
+  // Add property to hold the publisher function
+  private publisher: ((data: ProcessedImageUpdate) => void) | null = null;
 
-  constructor() {
-    this.worker = new Worker(new URL('./imageProcessorWorker.ts', import.meta.url));
-    this.initDB();
-    this.worker.onmessage = this.handleWorkerMessage.bind(this);
+  constructor(options?: ImageProcessorOptions) {
+    this.onError = options?.onError;
+
+    // Initialize the queue
+    const concurrency =
+      options?.concurrency ?? Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
+    this.queue = new PQueue({ concurrency });
+    console.log(`ImageProcessor: Initialized queue with concurrency ${concurrency}`);
+
+    // Initialize the worker and wrap it with Comlink
+    this.worker = new Worker(new URL('./imageProcessorWorker.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    this.proxy = wrap<ImageProcessorWorkerAPI>(this.worker);
+
+    // Remove the onmessage handler - results come via promise
+    // this.worker.onmessage = (event: MessageEvent<ImageProcessorMessage>) => {
+    //   this.handleWorkerMessage(event);
+    // };
+
     this.worker.onerror = error => {
-      console.error('Error in ImageProcessorWorker:', error);
-      this.isProcessing = false;
-      this.processNextRequest();
+      console.error('Unhandled error in ImageProcessorWorker:', error);
+      // This usually indicates a setup or non-recoverable worker error
+      // Consider notifying the UI about a general failure
+      this.onError?.('WORKER_FATAL', error.message || 'Worker failed');
     };
+
+    this.initializeCacheCheck();
   }
 
-  private async initDB() {
+  private async initializeCacheCheck() {
     try {
-      this.db = await openDB('imageCache', 1, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains('processedImages')) {
-            db.createObjectStore('processedImages', { keyPath: 'id' });
+      await this.checkCacheForStaleBlobs();
+    } catch (error) {
+      console.error('Failed initial cache check:', error);
+    }
+  }
+
+  // Method to set the publisher function after initialization
+  public setPublisher(publisher: (data: ProcessedImageUpdate) => void) {
+    console.log('[ImageProcessor] Publisher function set.');
+    this.publisher = publisher;
+  }
+
+  // --- Cache Management Methods ---
+  private async getCacheEntry(id: string): Promise<ProcessedImageCacheEntry | undefined> {
+    const db = await getDb();
+    return db.get(STORE_NAME, id);
+  }
+
+  private async setCacheEntry(entry: ProcessedImageCacheEntry): Promise<void> {
+    const db = await getDb();
+    await db.put(STORE_NAME, entry);
+  }
+
+  private async deleteCacheEntry(id: string): Promise<void> {
+    const db = await getDb();
+    await db.delete(STORE_NAME, id);
+  }
+
+  private async checkCacheForStaleBlobs() {
+    console.log('ImageProcessor: Checking cache for stale blob URLs...');
+    const db = await getDb();
+    const allEntries = await db.getAll(STORE_NAME);
+    let staleCount = 0;
+
+    for (const entry of allEntries) {
+      let shouldDelete = false;
+      try {
+        // Check low-res blob
+        if (entry.lowResUrl && entry.lowResUrl.startsWith('blob:')) {
+          const response = await fetch(entry.lowResUrl).catch(() => null);
+          if (!response || !response.ok) {
+            console.warn(`Stale low-res blob URL found for ${entry.id}. Removing.`);
+            shouldDelete = true; // Mark for deletion if blob is invalid
           }
-        },
-      });
-
-      // --- Add Cache Invalidation Logic ---
-      if (this.db) {
-        console.log('ImageProcessor: Checking cache for stale blob URLs...');
-        const tx = this.db.transaction('processedImages', 'readwrite');
-        const store = tx.objectStore('processedImages');
-        let cursor = await store.openCursor();
-        let staleCount = 0;
-
-        while (cursor) {
-          const value = cursor.value;
-          // Check if low or high quality URLs are persisted blob URLs
-          const isLowStale = value.low?.startsWith('blob:');
-          const isHighStale = value.high?.startsWith('blob:');
-
-          if (isLowStale || isHighStale) {
-            // If any blob URL is found, delete the entire entry as it's stale
-            await cursor.delete();
-            staleCount++;
-            // console.log(`ImageProcessor: Deleted stale cache entry for ${value.id}`);
+        }
+        // Check high-res blob
+        if (entry.highResUrl && entry.highResUrl.startsWith('blob:')) {
+          const response = await fetch(entry.highResUrl).catch(() => null);
+          if (!response || !response.ok) {
+            console.warn(`Stale high-res blob URL found for ${entry.id}. Removing.`);
+            shouldDelete = true;
           }
-          cursor = await cursor.continue();
         }
-        await tx.done;
-        if (staleCount > 0) {
-          console.log(`ImageProcessor: Removed ${staleCount} stale cache entries.`);
-        } else {
-          console.log('ImageProcessor: No stale blob URLs found in cache.');
-        }
+      } catch (e) {
+        console.warn(`Error checking blob URL for ${entry.id}. Assuming stale.`, e);
+        shouldDelete = true;
       }
-      // --- End Cache Invalidation Logic ---
-    } catch (error) {
-      console.error('Failed to initialize IndexedDB for image cache:', error);
-      this.db = null;
+
+      if (shouldDelete) {
+        await this.deleteCacheEntry(entry.id);
+        staleCount++;
+        // console.log(`ImageProcessor: Deleted stale cache entry for ${entry.id}`);
+      }
+    }
+
+    if (staleCount > 0) {
+      console.log(`ImageProcessor: Removed ${staleCount} stale cache entries.`);
+    } else {
+      console.log('ImageProcessor: No stale blob URLs found in cache.');
     }
   }
 
-  private async getCachedImageData(id: string): Promise<CachedProcessedImage | null> {
-    if (!this.db) return null;
-    try {
-      return ((await this.db.get('processedImages', id)) as CachedProcessedImage | null) ?? null;
-    } catch (error) {
-      console.error(`Failed to get cached image data for ${id}:`, error);
-      return null;
-    }
-  }
+  // --- Public Processing Methods (using Comlink) ---
 
-  private async cacheImageData(
-    id: string,
-    quality: 'low' | 'high',
-    imageDataUrl: string,
-    width: number,
-    height: number
-  ) {
-    if (!this.db) return;
-    try {
-      const tx = this.db.transaction('processedImages', 'readwrite');
-      const store = tx.objectStore('processedImages');
-      const existingData = await store.get(id);
+  async processImage(image: ImageInfo): Promise<void> {
+    const { id, src, width, height } = image;
 
-      const newData: CachedProcessedImage = {
-        ...(existingData || {}),
-        id: id,
-        width: width,
-        height: height,
-        [quality]: imageDataUrl,
-      };
-
-      await store.put(newData);
-      await tx.done;
-    } catch (error) {
-      console.error(`Failed to cache image data for ${id} (${quality}):`, error);
-    }
-  }
-
-  private async processNextRequest() {
-    if (this.isProcessing || this.requestQueue.length === 0) return;
-
-    this.isProcessing = true;
-    const request = this.requestQueue.shift()!;
-
-    if (this.isWorkerCancelled && request.type !== 'image' && request.type !== 'batch') {
-      console.log('ImageProcessor: Worker cancelled, skipping non-processing request.');
-      this.isProcessing = false;
-      this.processNextRequest();
+    if (!id || !src || !width || !height) {
+      console.error('Invalid image data provided to processImage:', image);
+      this.onError?.(id || 'unknown', 'Invalid image data');
       return;
     }
 
-    if (request.type === 'image') {
-      this.isWorkerCancelled = false;
-      await this.processImageRequest(request.payload, request.callback);
-    } else if (request.type === 'batch') {
-      this.isWorkerCancelled = false;
-      await this.processBatchRequest(request.payload, request.callback);
+    // Check cache immediately before queueing
+    try {
+      const cachedEntry = await this.getCacheEntry(id);
+      const lowResMatches =
+        cachedEntry?.lowResWidth === Math.round(width / 4) &&
+        cachedEntry?.lowResHeight === Math.round(height / 4);
+      const highResMatches = cachedEntry?.width === width && cachedEntry?.height === height;
+
+      if (cachedEntry?.lowResUrl && cachedEntry?.highResUrl && lowResMatches && highResMatches) {
+        console.log(`ImageProcessor: Cache hit for ${id} (pre-queue). Skipping queue.`);
+        // Publish low-res from cache
+        this.publisher?.({
+          id,
+          quality: 'low',
+          imageUrl: cachedEntry.lowResUrl,
+          width: cachedEntry.lowResWidth!,
+          height: cachedEntry.lowResHeight!,
+        });
+        // Publish high-res from cache
+        this.publisher?.({
+          id,
+          quality: 'high',
+          imageUrl: cachedEntry.highResUrl,
+          width: cachedEntry.width!,
+          height: cachedEntry.height!,
+        });
+        return; // Already cached, no need to queue
+      }
+    } catch (cacheError) {
+      console.error(`ImageProcessor: Error checking cache pre-queue for ${id}:`, cacheError);
+      // Proceed to queue anyway?
     }
 
-    this.isProcessing = false;
-    setTimeout(() => this.processNextRequest(), 0);
-  }
+    // Check if already actively being processed or queued
+    if (this.activeRequests.has(id)) {
+      console.log(`ImageProcessor: Request for ${id} is already active/queued. Skipping.`);
+      return;
+    }
 
-  private async processImageRequest(
-    image: { id: string; src: string; width: number; height: number },
-    callback?: ProcessedImageCallback
-  ) {
-    const { id, src, width: requestedWidth, height: requestedHeight } = image;
+    // Create controller and add to active requests *before* queueing
+    const controller = new AbortController();
+    this.activeRequests.set(id, controller);
 
-    // 1. Check Cache
-    const cachedData = await this.getCachedImageData(id);
-
-    // 2. Determine if Cache is Usable
-    let needsProcessing = true;
-    let reason = 'No cache found';
-
-    if (cachedData) {
-      if (cachedData.high) {
-        // Check if dimensions match the current request
-        const dimensionsMatch = !areDimensionsDifferent(
-          cachedData.width, // Use optional chaining or ensure it exists
-          cachedData.height,
-          requestedWidth,
-          requestedHeight
-        );
-
-        if (dimensionsMatch) {
-          needsProcessing = false;
-          reason = 'Cache hit (matching dimensions)';
-          console.log(`ImageProcessor: Cache hit for ${id} with matching dimensions.`);
-
-          // Trigger callback immediately with cached data
-          if (callback) {
-            if (cachedData.low) {
-              callback({ id: id, quality: 'low', processedImage: cachedData.low });
-            }
-            callback({ id: id, quality: 'high', processedImage: cachedData.high });
-          }
-        } else {
-          needsProcessing = true;
-          reason = 'Cache found but dimensions mismatch';
-          console.log(
-            `ImageProcessor: Cache found for ${id} but dimensions mismatch. Requesting re-processing.`
-          );
-          // Don't use cached blobs, proceed to worker request
-        }
-      } else {
-        needsProcessing = true;
-        reason = 'Cache found but high-res missing';
+    // Add the processing logic to the queue
+    this.queue
+      .add(async () => {
         console.log(
-          `ImageProcessor: Cache found for ${id} but high-res missing. Requesting processing.`
+          `ImageProcessor: Starting queued task for ${id}. Queue size: ${this.queue.size}`
         );
-        // Trigger callback with low-res if available, but still request full processing
-        if (cachedData.low && callback) {
-          callback({ id: id, quality: 'low', processedImage: cachedData.low });
-        }
-      }
-    }
+        let createdBitmap: ImageBitmap | null = null;
+        try {
+          // Re-check cache inside queue in case it was populated while waiting
+          const cachedEntry = await this.getCacheEntry(id);
+          const lowResMatches =
+            cachedEntry?.lowResWidth === Math.round(width / 4) &&
+            cachedEntry?.lowResHeight === Math.round(height / 4);
+          const highResMatches = cachedEntry?.width === width && cachedEntry?.height === height;
 
-    // 3. Request Processing from Worker if Needed
-    if (needsProcessing) {
-      console.log(`ImageProcessor: Sending image ${id} to worker. Reason: ${reason}`);
-      // Register callback before sending to worker
-      if (callback) {
-        const existingCallbacks = this.callbacks.get(id) || [];
-        if (!existingCallbacks.includes(callback)) {
-          this.callbacks.set(id, [...existingCallbacks, callback]);
+          if (
+            cachedEntry?.lowResUrl &&
+            cachedEntry?.highResUrl &&
+            lowResMatches &&
+            highResMatches
+          ) {
+            console.log(`ImageProcessor: Cache hit for ${id} (in-queue). Skipping processing.`);
+            // Publish low-res from cache
+            this.publisher?.({
+              id,
+              quality: 'low',
+              imageUrl: cachedEntry.lowResUrl,
+              width: cachedEntry.lowResWidth!,
+              height: cachedEntry.lowResHeight!,
+            });
+            // Publish high-res from cache
+            this.publisher?.({
+              id,
+              quality: 'high',
+              imageUrl: cachedEntry.highResUrl,
+              width: cachedEntry.width!,
+              height: cachedEntry.height!,
+            });
+            return; // Exit queued task
+          }
+
+          // Check signal before potentially long operations
+          if (controller.signal.aborted)
+            throw new DOMException('Aborted before processing', 'AbortError');
+
+          // --- Prepare / Fetch Bitmap (same logic as before) ---
+          let reason = 'No cache entry';
+          let needsProcessing = true;
+
+          if (cachedEntry && (!lowResMatches || !highResMatches)) {
+            reason = `Cache found for ${id} but dimensions mismatch. Requesting re-processing.`;
+            await this.deleteCacheEntry(id);
+          } else if (cachedEntry?.lowResUrl && lowResMatches) {
+            reason = `Low-res cache hit for ${id}, processing for high-res.`;
+            // Publish low-res from cache
+            this.publisher?.({
+              id,
+              quality: 'low',
+              imageUrl: cachedEntry.lowResUrl,
+              width: cachedEntry.lowResWidth!,
+              height: cachedEntry.lowResHeight!,
+            });
+          } else if (cachedEntry) {
+            reason = `Inconsistent cache state for ${id}. Requesting re-processing.`;
+            await this.deleteCacheEntry(id);
+          }
+
+          console.log(`ImageProcessor: Fetching image ${id} to create ImageBitmap (queued).`);
+          try {
+            const response = await fetch(src, { signal: controller.signal });
+            if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+            const blob = await response.blob();
+            if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+            createdBitmap = await createImageBitmap(blob);
+          } catch (fetchError: any) {
+            if (fetchError.name !== 'AbortError') {
+              console.error(
+                `ImageProcessor: Error fetching/creating bitmap for ${id} (queued):`,
+                fetchError
+              );
+              this.onError?.(id, fetchError.message || 'Failed to load image data');
+            }
+            // Rethrow to be caught by outer try/catch
+            throw fetchError;
+          }
+
+          // --- Call Worker ---
+          if (controller.signal.aborted)
+            throw new DOMException('Aborted before worker call', 'AbortError');
+          console.log(
+            `ImageProcessor: Sending image ${id} to worker via Comlink (queued). Reason: ${reason}`
+          );
+          const result = await this.proxy.processImage(
+            Comlink.transfer(
+              { id, imageBitmap: createdBitmap, width, height /* signal: controller.signal */ },
+              [createdBitmap]
+            )
+          );
+          createdBitmap = null; // Nullify after transfer
+
+          // --- Process Result ---
+          if (controller.signal.aborted) {
+            console.log(`ImageProcessor: Processing for ${id} aborted after worker call (queued).`);
+            if (result.lowResUrl) URL.revokeObjectURL(result.lowResUrl);
+            if (result.highResUrl) URL.revokeObjectURL(result.highResUrl);
+            return;
+          }
+
+          console.log(`ImageProcessor: Received results for ${id} from worker (queued).`);
+          const finalEntry: ProcessedImageCacheEntry = {
+            ...((await this.getCacheEntry(id)) || { id }),
+            id,
+            lowResUrl: result.lowResUrl ?? cachedEntry?.lowResUrl,
+            lowResWidth: result.lowResUrl ? Math.round(width / 4) : cachedEntry?.lowResWidth,
+            lowResHeight: result.lowResUrl ? Math.round(height / 4) : cachedEntry?.lowResHeight,
+            highResUrl: result.highResUrl,
+            width: result.highResUrl ? width : cachedEntry?.width,
+            height: result.highResUrl ? height : cachedEntry?.height,
+            timestamp: Date.now(),
+          };
+
+          await this.setCacheEntry(finalEntry);
+
+          // Publish results using the publisher function
+          if (result.lowResUrl) {
+            this.publisher?.({
+              id,
+              quality: 'low',
+              imageUrl: finalEntry.lowResUrl!,
+              width: finalEntry.lowResWidth!,
+              height: finalEntry.lowResHeight!,
+            });
+          }
+          if (result.highResUrl) {
+            this.publisher?.({
+              id,
+              quality: 'high',
+              imageUrl: finalEntry.highResUrl!,
+              width: finalEntry.width!,
+              height: finalEntry.height!,
+            });
+          }
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            console.log(`ImageProcessor: Queued task for ${id} aborted.`);
+          } else {
+            console.error(`ImageProcessor: Error during queued processing for ${id}:`, error);
+            this.onError?.(id, error.message || 'Queued processing failed');
+          }
+        } finally {
+          if (createdBitmap) {
+            try {
+              createdBitmap.close();
+            } catch (e) {
+              console.warn(`Error closing untransferred bitmap for ${id} (queued):`, e);
+            }
+          }
+          // Remove from active requests only when the queued task finishes/errors/aborts
+          this.activeRequests.delete(id);
+          console.log(
+            `ImageProcessor: Finished queued task for ${id}. Queue size: ${this.queue.size}`
+          );
         }
-      }
-      // Send request with current dimensions
-      this.worker.postMessage({
-        action: 'processImage',
-        id,
-        src,
-        width: requestedWidth,
-        height: requestedHeight,
+      })
+      .catch(error => {
+        // Catch errors from queue.add itself (rare)
+        console.error(`ImageProcessor: Error adding task to queue for ${id}:`, error);
+        this.activeRequests.delete(id); // Ensure cleanup if add fails
+        this.onError?.(id, error.message || 'Failed to queue task');
       });
-    }
   }
 
-  private async processBatchRequest(
-    images: { id: string; src: string; width: number; height: number }[],
-    batchCallback?: ProcessedImageCallback
-  ) {
-    const imagesToSendToWorker = [];
-    const DIMENSION_THRESHOLD = 0.1; // Same threshold as single image
+  async processBatch(images: ImageInfo[]): Promise<void> {
+    const batchId = `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    for (const image of images) {
-      const { id, src, width: requestedWidth, height: requestedHeight } = image;
-      const cachedData = await this.getCachedImageData(id);
+    // Check if a batch request is already active/queued (using a placeholder ID structure)
+    // This simple check might not be sufficient if overlapping batches are possible
+    if (this.activeRequests.has(batchId)) {
+      // Use generated batchId for tracking
+      console.log(
+        `ImageProcessor: Batch request ${batchId} appears to be already active/queued. Skipping.`
+      );
+      return;
+    }
 
-      let needsProcessing = true;
-      if (cachedData?.high) {
-        const dimensionsMatch = !areDimensionsDifferent(
-          cachedData.width,
-          cachedData.height,
-          requestedWidth,
-          requestedHeight,
-          DIMENSION_THRESHOLD
+    const controller = new AbortController();
+    this.activeRequests.set(batchId, controller);
+
+    // Add batch processing logic to the queue
+    this.queue
+      .add(async () => {
+        console.log(
+          `ImageProcessor: Starting queued batch task ${batchId}. Queue size: ${this.queue.size}`
         );
-        if (dimensionsMatch) {
-          needsProcessing = false;
-          // Trigger callback immediately with cached data if provided
-          if (batchCallback) {
-            if (cachedData.low)
-              batchCallback({ id: id, quality: 'low', processedImage: cachedData.low });
-            batchCallback({ id: id, quality: 'high', processedImage: cachedData.high });
-          }
-        } // else: dimensions mismatch, needs processing
-      } else if (cachedData?.low && batchCallback) {
-        // If only low-res cached, trigger callback for low-res but still process
-        batchCallback({ id: id, quality: 'low', processedImage: cachedData.low });
-      }
+        const imagesToProcess: Array<{
+          id: string;
+          imageBitmap: ImageBitmap;
+          width: number;
+          height: number;
+        }> = [];
+        const transferList: ImageBitmap[] = [];
+        const preCheckPromises: Promise<void>[] = [];
+        const createdBitmaps: ImageBitmap[] = [];
+        let batchError: Error | null = null; // Track error within the queued task
 
-      if (needsProcessing) {
-        imagesToSendToWorker.push(image); // Add to worker batch
-        // Register callback for this image
-        if (batchCallback) {
-          const existingCallbacks = this.callbacks.get(id) || [];
-          if (!existingCallbacks.includes(batchCallback)) {
-            this.callbacks.set(id, [...existingCallbacks, batchCallback]);
+        try {
+          console.log(
+            `ImageProcessor: Starting batch preparation for ${images.length} images (queued). Batch ID: ${batchId}`
+          );
+
+          // --- Pre-check Cache and Fetch Bitmaps (inside queue task) ---
+          for (const image of images) {
+            const { id, src, width, height } = image;
+            if (!id || !src || !width || !height) {
+              console.error('Invalid image data in batch (queued):', image);
+              this.onError?.(id || 'unknown-batch', 'Invalid image data in batch');
+              continue;
+            }
+
+            preCheckPromises.push(
+              (async () => {
+                if (controller.signal.aborted) return;
+                let localBitmap: ImageBitmap | null = null;
+                try {
+                  const cachedEntry = await this.getCacheEntry(id);
+                  const lowResMatches =
+                    cachedEntry?.lowResWidth === Math.round(width / 4) &&
+                    cachedEntry?.lowResHeight === Math.round(height / 4);
+                  const highResMatches =
+                    cachedEntry?.width === width && cachedEntry?.height === height;
+
+                  if (
+                    cachedEntry?.lowResUrl &&
+                    cachedEntry?.highResUrl &&
+                    lowResMatches &&
+                    highResMatches
+                  ) {
+                    if (controller.signal.aborted) return;
+                    // Publish low-res from cache
+                    this.publisher?.({
+                      id,
+                      quality: 'low',
+                      imageUrl: cachedEntry.lowResUrl,
+                      width: cachedEntry.lowResWidth!,
+                      height: cachedEntry.lowResHeight!,
+                    });
+                    // Publish high-res from cache
+                    this.publisher?.({
+                      id,
+                      quality: 'high',
+                      imageUrl: cachedEntry.highResUrl,
+                      width: cachedEntry.width!,
+                      height: cachedEntry.height!,
+                    });
+                    return;
+                  }
+
+                  if (cachedEntry && (!lowResMatches || !highResMatches)) {
+                    if (controller.signal.aborted) return;
+                    console.log(
+                      `ImageProcessor: Clearing mismatched cache for batch item ${id} (queued)`
+                    );
+                    await this.deleteCacheEntry(id);
+                  }
+
+                  if (controller.signal.aborted) return;
+                  console.log(`ImageProcessor: Fetching batch item ${id} (queued)`);
+                  const response = await fetch(src, { signal: controller.signal });
+                  if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+                  const blob = await response.blob();
+                  if (controller.signal.aborted) return;
+                  localBitmap = await createImageBitmap(blob);
+                  createdBitmaps.push(localBitmap);
+
+                  imagesToProcess.push({ id, imageBitmap: localBitmap, width, height });
+                  transferList.push(localBitmap);
+
+                  if (cachedEntry?.lowResUrl && lowResMatches) {
+                    if (controller.signal.aborted) return;
+                    // Publish low-res from cache
+                    this.publisher?.({
+                      id,
+                      quality: 'low',
+                      imageUrl: cachedEntry.lowResUrl,
+                      width: cachedEntry.lowResWidth!,
+                      height: cachedEntry.lowResHeight!,
+                    });
+                  }
+                } catch (error: any) {
+                  if (localBitmap) {
+                    try {
+                      localBitmap.close();
+                    } catch {}
+                    const index = createdBitmaps.indexOf(localBitmap);
+                    if (index > -1) createdBitmaps.splice(index, 1);
+                  }
+                  if (error.name !== 'AbortError') {
+                    console.error(
+                      `ImageProcessor: Error preparing batch item ${id} (queued):`,
+                      error
+                    );
+                    this.onError?.(id, error.message || 'Batch item preparation failed');
+                  } else {
+                    // Re-throw abort error to stop Promise.all
+                    throw error;
+                  }
+                }
+              })()
+            );
           }
+
+          // Wait for preparation inside the queue task
+          await Promise.all(preCheckPromises);
+
+          if (controller.signal.aborted) {
+            console.log(`ImageProcessor: Batch ${batchId} aborted during preparation (queued).`);
+            throw new DOMException('Batch preparation aborted', 'AbortError');
+          }
+
+          // --- Call Worker ---
+          if (imagesToProcess.length > 0) {
+            console.log(
+              `ImageProcessor: Sending batch ${batchId} of ${imagesToProcess.length} images to worker via Comlink (queued).`
+            );
+            const batchResults = await this.proxy.processBatch(
+              Comlink.transfer(
+                { images: imagesToProcess /* signal: controller.signal */ },
+                transferList
+              )
+            );
+
+            // --- Process Results ---
+            if (controller.signal.aborted) {
+              console.log(
+                `ImageProcessor: Batch ${batchId} aborted after worker completed (queued).`
+              );
+              batchResults.forEach(r => {
+                if (r.lowResUrl) URL.revokeObjectURL(r.lowResUrl);
+                if (r.highResUrl) URL.revokeObjectURL(r.highResUrl);
+              });
+              // Still need to throw abort error to trigger finally cleanup correctly
+              throw new DOMException('Batch aborted post-worker', 'AbortError');
+            }
+
+            console.log(
+              `ImageProcessor: Received ${batchResults.length} results for batch ${batchId} (queued).`
+            );
+            const cacheUpdatePromises: Promise<void>[] = [];
+            for (const result of batchResults) {
+              const { id: resultId, lowResUrl, highResUrl } = result;
+              const originalItem = imagesToProcess.find(item => item.id === resultId);
+              const originalWidth = originalItem?.width;
+              const originalHeight = originalItem?.height;
+
+              if (!originalWidth || !originalHeight) continue;
+              const existingEntry = await this.getCacheEntry(resultId);
+              const finalEntry: ProcessedImageCacheEntry = {
+                id: resultId,
+                lowResUrl: result.lowResUrl ?? existingEntry?.lowResUrl,
+                lowResWidth: result.lowResUrl
+                  ? Math.round(originalWidth / 4)
+                  : existingEntry?.lowResWidth,
+                lowResHeight: result.lowResUrl
+                  ? Math.round(originalHeight / 4)
+                  : existingEntry?.lowResHeight,
+                highResUrl: result.highResUrl ?? existingEntry?.highResUrl,
+                width: result.highResUrl ? originalWidth : existingEntry?.width,
+                height: result.highResUrl ? originalHeight : existingEntry?.height,
+                timestamp: Date.now(),
+              };
+              cacheUpdatePromises.push(this.setCacheEntry(finalEntry));
+              // Publish results using the publisher function
+              if (result.lowResUrl) {
+                this.publisher?.({
+                  id: resultId,
+                  quality: 'low',
+                  imageUrl: finalEntry.lowResUrl!,
+                  width: finalEntry.lowResWidth!,
+                  height: finalEntry.lowResHeight!,
+                });
+              }
+              if (result.highResUrl) {
+                this.publisher?.({
+                  id: resultId,
+                  quality: 'high',
+                  imageUrl: finalEntry.highResUrl!,
+                  width: finalEntry.width!,
+                  height: finalEntry.height!,
+                });
+              }
+            }
+            await Promise.all(cacheUpdatePromises);
+          } else {
+            console.log(
+              `ImageProcessor: No images needed processing for batch ${batchId} (queued).`
+            );
+          }
+        } catch (error: any) {
+          batchError = error; // Store error to handle in finally
+          if (error.name === 'AbortError') {
+            console.log(`ImageProcessor: Queued batch ${batchId} processing aborted.`);
+          } else {
+            console.error(`ImageProcessor: Error processing queued batch ${batchId}:`, error);
+            this.onError?.(batchId, error.message || 'Queued batch processing failed');
+          }
+        } finally {
+          // Ensure bitmaps not transferred are closed if aborted/errored during prep
+          // Also close bitmaps if a non-abort error occurred after prep
+          if (batchError?.name === 'AbortError' || batchError) {
+            createdBitmaps.forEach(bitmap => {
+              // Check if it was actually transferred before trying to close
+              if (!transferList.includes(bitmap)) {
+                try {
+                  bitmap.close();
+                } catch {}
+              }
+            });
+          }
+          // Worker handles closing transferred bitmaps
+          this.activeRequests.delete(batchId);
+          console.log(
+            `ImageProcessor: Finished queued batch task ${batchId}. Queue size: ${this.queue.size}`
+          );
         }
-      }
-    }
+      })
+      .catch(error => {
+        // Catch errors from queue.add itself
+        console.error(`ImageProcessor: Error adding batch task to queue ${batchId}:`, error);
+        this.activeRequests.delete(batchId); // Ensure cleanup
+        this.onError?.(batchId, error.message || 'Failed to queue batch task');
+      });
+  }
 
-    if (imagesToSendToWorker.length > 0) {
-      console.log(
-        `ImageProcessor: Sending batch of ${imagesToSendToWorker.length} images to worker (out of ${images.length}).`
-      );
-      this.worker.postMessage({ action: 'processBatch', images: imagesToSendToWorker });
+  // --- Control Methods ---
+  cancel(id?: string) {
+    if (id) {
+      const controller = this.activeRequests.get(id);
+      if (controller) {
+        console.log(`ImageProcessor: Aborting request ${id}.`);
+        controller.abort();
+        // Don't delete immediately, let the queued task handle cleanup in finally
+        // this.activeRequests.delete(id);
+      } else {
+        console.log(`ImageProcessor: No active request found for ID ${id} to cancel.`);
+      }
     } else {
       console.log(
-        `ImageProcessor: All ${images.length} batch images were already fully cached with matching dimensions.`
+        `ImageProcessor: Aborting all ${this.activeRequests.size} active requests and clearing queue.`
       );
+      // Abort all active controllers
+      this.activeRequests.forEach(controller => controller.abort());
+      // Clear pending tasks from the queue
+      this.queue.clear();
+      // Clear the tracking map
+      this.activeRequests.clear();
     }
   }
 
-  private handleWorkerMessage(event: MessageEvent<ImageProcessorMessage>) {
-    if (
-      event.data.action === 'imageProcessed' &&
-      event.data.id &&
-      event.data.processedImage &&
-      event.data.quality &&
-      event.data.width !== undefined &&
-      event.data.height !== undefined
-    ) {
-      const { id, quality, processedImage, width, height } = event.data;
+  cancelAll() {
+    this.cancel(); // cancel() without id now handles clearing everything
+  }
 
-      console.log(
-        `ImageProcessor received processed image: ${id}, quality: ${quality}, size: ${width}x${height}`
-      );
-
-      this.cacheImageData(id, quality, processedImage, width, height);
-
-      const imageCallbacks = this.callbacks.get(id);
-      if (imageCallbacks) {
-        imageCallbacks.forEach(cb => cb({ id, quality, processedImage }));
-        if (quality === 'high') {
-          this.callbacks.delete(id);
-        }
-      }
-    } else {
-      console.warn(
-        'ImageProcessor received incomplete or unexpected message from worker:',
-        event.data
-      );
+  terminate() {
+    console.log(
+      'ImageProcessor: Terminating worker, cancelling active requests, clearing queue, and closing DB.'
+    );
+    this.cancelAll(); // Abort ongoing and clear pending
+    // Add a small delay to allow abort signals to propagate potentially?
+    // setTimeout(() => {...
+    try {
+      this.proxy[Comlink.releaseProxy]();
+    } catch (e) {
+      console.warn('ImageProcessor: Error releasing Comlink proxy:', e);
     }
-    this.isProcessing = false;
-    this.processNextRequest();
-  }
-
-  public requestImageProcessing(
-    image: { id: string; src: string; width: number; height: number },
-    callback?: ProcessedImageCallback
-  ) {
-    this.requestQueue.push({ type: 'image', payload: image, callback });
-    // Ensure the processing loop is triggered if not already running
-    if (!this.isProcessing) {
-      this.processNextRequest();
-    }
-  }
-
-  public requestBatchProcessing(
-    images: { id: string; src: string; width: number; height: number }[],
-    callback?: ProcessedImageCallback
-  ) {
-    this.requestQueue.push({ type: 'batch', payload: images, callback });
-    // Ensure the processing loop is triggered if not already running
-    if (!this.isProcessing) {
-      this.processNextRequest();
-    }
-  }
-
-  public cancel() {
-    console.log('ImageProcessor: Clearing request queue and sending cancel to worker.');
-    this.requestQueue = [];
-    this.callbacks.clear();
-    this.isWorkerCancelled = true;
-    this.worker.postMessage({ action: 'cancel' });
-    this.isProcessing = false;
-  }
-
-  public terminate() {
-    console.log('ImageProcessor: Terminating worker and closing DB.');
-    this.cancel();
     this.worker.terminate();
-    if (this.db) {
-      this.db.close();
-      this.db = null;
+    if (dbPromise) {
+      getDb().then(db => db.close());
+      dbPromise = null;
     }
+    // }, 50); // Example delay
   }
 }
 
-export function createImageProcessor() {
-  return new ImageProcessor();
+export function createImageProcessor(options?: Omit<ImageProcessorOptions, 'onImageProcessed'>) {
+  return new ImageProcessor(options);
 }

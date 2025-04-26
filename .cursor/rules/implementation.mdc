@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description: Codebase Framework
+globs:
 alwaysApply: false
 ---
 # Implementation Details

@@ -1,11 +1,9 @@
-import { motion } from 'framer-motion';
-import React, { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ColorContext } from '../contexts/ColorContext';
+import { AnimatePresence, motion } from 'framer-motion';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ProcessedImageUpdate, useImageProcessing } from '../contexts/ImageProcessingContext';
 import styles from '../styles/ImageItem.module.scss';
 import { ImageInfo } from '../types/index.js';
-import AnimationSystem from '../utils/AnimationSystem';
 import { truncateImageTitle } from '../utils/stringUtils.js';
-import WorkerPool from '../workers/workerPool';
 
 // Define hover data payload
 export interface ImageHoverData {
@@ -29,7 +27,6 @@ interface ImageItemProps {
   containerHeight: number;
   zoom: number;
   groupCount?: number;
-  workerPool: WorkerPool;
   onResize?: (width: number, height: number) => void;
   width: number;
   height: number;
@@ -37,7 +34,40 @@ interface ImageItemProps {
   groupImages: ImageInfo[];
   onImageHover: (data: ImageHoverData) => void;
   onImageLoadError: (imageId: string) => void;
+  dominantColor?: string | null; // Added optional prop for color from worker
 }
+
+// Define animation variants
+const placeholderVariants = {
+  initial: { opacity: 1, scale: 1, filter: 'blur(0px)' }, // Start fully visible
+  exit: {
+    // Animate out when isHighResLoaded becomes true
+    opacity: 0,
+    scale: 0.98, // Slight scale down
+    // filter: 'blur(10px)', // Optional blur out
+    transition: {
+      type: 'spring',
+      stiffness: 100,
+      damping: 20,
+      duration: 0.3, // Allow spring to resolve faster
+    },
+  },
+};
+
+const imageVariants = {
+  initial: { opacity: 0, scale: 0.98 }, // Start hidden and slightly smaller
+  animate: {
+    // Animate in when isHighResLoaded becomes true
+    opacity: 1,
+    scale: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 120,
+      damping: 25,
+      delay: 0.05, // Slight delay to ensure placeholder starts exiting
+    },
+  },
+};
 
 // ResponsiveImage component (Refined & Forwarding Ref)
 interface ResponsiveImageProps {
@@ -45,30 +75,24 @@ interface ResponsiveImageProps {
   alt: string;
   width?: number;
   isProcessed: boolean;
-  // isLoaded state is managed internally by ResponsiveImage now
   onLoad: () => void;
   onError: () => void;
   className?: string;
   style?: React.CSSProperties;
+  animate?: 'initial' | 'animate'; // Control animation state from parent
 }
 
 const ResponsiveImage = React.forwardRef<HTMLImageElement, ResponsiveImageProps>(
-  ({ src, alt, width, isProcessed, onLoad, onError, className, style }, ref) => {
-    const [isInternallyLoaded, setIsInternallyLoaded] = useState(false);
-
-    // Reset loaded state if src changes
-    useEffect(() => {
-      setIsInternallyLoaded(false);
-    }, [src]);
-
+  (
+    { src, alt, width, isProcessed, onLoad, onError, className, style, animate = 'initial' },
+    ref
+  ) => {
     const handleLoad = useCallback(() => {
-      setIsInternallyLoaded(true);
-      onLoad(); // Notify parent
+      onLoad();
     }, [onLoad]);
 
     const handleError = useCallback(() => {
-      setIsInternallyLoaded(false); // Ensure opacity stays 0 on error
-      onError(); // Notify parent
+      onError();
     }, [onError]);
 
     const useSrcSet = !isProcessed && width && !src.startsWith('blob:');
@@ -88,22 +112,13 @@ const ResponsiveImage = React.forwardRef<HTMLImageElement, ResponsiveImageProps>
         src={src}
         alt={alt}
         className={className}
+        style={style}
         loading="lazy"
-        style={{
-          display: 'block',
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          position: 'absolute', // Position absolutely to overlay placeholder
-          top: 0,
-          left: 0,
-          ...style,
-        }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: isInternallyLoaded ? 1 : 0 }} // Use internal loaded state
-        transition={{ duration: 0.4, ease: 'easeIn' }}
+        variants={imageVariants}
+        initial="initial"
+        animate={animate}
         onLoad={handleLoad}
-        onError={handleError} // Use the internal error handler
+        onError={handleError}
         srcSet={srcSet}
         sizes={sizes}
       />
@@ -119,7 +134,6 @@ const ImageItem: React.FC<ImageItemProps> = ({
   containerHeight,
   zoom = 1,
   groupCount,
-  workerPool,
   onResize,
   width,
   height,
@@ -127,75 +141,55 @@ const ImageItem: React.FC<ImageItemProps> = ({
   groupImages = [],
   onImageHover,
   onImageLoadError,
+  dominantColor,
 }) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  // isLoaded now primarily tracks if the HIGH-RES version is ready
   const [isHighResLoaded, setIsHighResLoaded] = useState(false);
   const [processedUrls, setProcessedUrls] = useState<{ low?: string; high?: string }>({});
-  const animationSystem = useMemo(() => AnimationSystem.getInstance(), []);
-  const { dominantColors } = useContext(ColorContext);
-  const [isIntersecting, setIsIntersecting] = useState(false);
-  const processedRequestedRef = useRef(false);
   const [hasError, setHasError] = useState(false);
-  const [hasLowResProcessed, setHasLowResProcessed] = useState(false);
-  const [hasHighResProcessed, setHasHighResProcessed] = useState(false);
+  const { subscribeToImageUpdates } = useImageProcessing();
 
-  // Get dominant color for placeholder - Use fallback only
   const placeholderColor = useMemo(() => {
-    // Cannot use dominantColors[image.id] as it's likely string[]
-    // console.log('Dominant Colors from context:', dominantColors); // Optional: Log to see the actual structure
-    return '#333'; // Fallback color
-  }, [image.id]); // Remove dominantColors from dependency array
+    return dominantColor || '#333';
+  }, [dominantColor]);
 
   const targetWidth = containerWidth;
   const targetHeight = containerHeight;
 
   const aspectRatio = useMemo(() => {
-    // Use intrinsic image ratio if available and valid
     if (image.width && image.height && image.width > 0 && image.height > 0) {
       return `${image.width} / ${image.height}`;
     }
-    // Fallback based on container dimensions if intrinsic is missing/invalid
     if (targetWidth > 0 && targetHeight > 0) {
       return `${targetWidth} / ${targetHeight}`;
     }
-    return '1 / 1'; // Default fallback aspect ratio (square)
+    return '1 / 1';
   }, [image.width, image.height, targetWidth, targetHeight]);
 
-  // Notify parent of size changes using cached dimensions
   useEffect(() => {
     if (onResize) {
       onResize(targetWidth, targetHeight);
     }
   }, [targetWidth, targetHeight, onResize]);
 
-  // Hover Handlers (Only for Context Update)
   const handleMouseEnter = useCallback(() => {
     if (containerRef.current) {
-      // Calculate position and notify parent (for AuraBackground)
       const rect = containerRef.current.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
-
-      // Normalize position relative to viewport
       const normalizedX = centerX / window.innerWidth;
       const normalizedY = centerY / window.innerHeight;
-
-      // Cannot reliably get specific item color from context if it's just an array
-      const itemColor = null;
       onImageHover({
         isHovering: true,
         position: { x: normalizedX, y: normalizedY },
-        color: itemColor,
+        color: dominantColor || null,
         imageId: image.id,
       });
     }
-  }, [onImageHover, image.id]); // Remove dominantColors from dependency array
+  }, [onImageHover, image.id, dominantColor]);
 
   const handleMouseLeave = useCallback(() => {
-    // Notify parent that hover ended (for AuraBackground)
-    console.log('[ImageItem Hover Leave]');
     onImageHover({
       isHovering: false,
       position: null,
@@ -204,191 +198,136 @@ const ImageItem: React.FC<ImageItemProps> = ({
     });
   }, [onImageHover, image.id]);
 
-  // Callback for when the worker sends back processed data
-  const handleProcessedImage = useCallback(
-    (data: ProcessedImageData) => {
-      if (data.id === image.id) {
-        setProcessedUrls(prev => ({
-          ...prev,
-          [data.quality]: data.processedImage,
-        }));
-        // Track which versions have been processed
-        if (data.quality === 'low') {
-          setHasLowResProcessed(true);
-        }
-        if (data.quality === 'high') {
-          setHasHighResProcessed(true);
-          // Consider high-res loaded once its data URL is received
-          // setIsHighResLoaded(true); // Let ResponsiveImage's onLoad handle the final loaded state
-        }
-      }
+  const handleProcessedImageUpdate = useCallback(
+    (data: ProcessedImageUpdate) => {
+      console.log(`[ImageItem ${image.id}] Received processed data via context: ${data.quality}`);
+      setProcessedUrls(prev => ({
+        ...prev,
+        [data.quality]: data.imageUrl,
+      }));
     },
     [image.id]
   );
 
-  // Observe when this item enters the viewport
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsIntersecting(entry.isIntersecting);
-        if (entry.isIntersecting) {
-          // Only request processing if intersecting and not already requested *for this item*
-          if (!processedRequestedRef.current && targetWidth > 0 && targetHeight > 0) {
-            const processor = workerPool.getImageProcessor();
-            processor.requestImageProcessing(
-              {
-                id: image.id,
-                src: image.src,
-                width: targetWidth,
-                height: targetHeight,
-              },
-              handleProcessedImage
-            );
-            processedRequestedRef.current = true;
-          } else if (processedRequestedRef.current) {
-            // console.log(... processing already requested ...);
-          } else {
-            // console.log(... dimensions invalid ...);
-          }
-        }
-      },
-      {
-        root: null, // Use the viewport as the root
-        rootMargin: '300px', // Trigger when item is 300px away from viewport
-        threshold: 0, // Trigger as soon as any part is visible
-      }
-    );
+    const unsubscribe = subscribeToImageUpdates(image.id, handleProcessedImageUpdate);
 
-    const currentRef = containerRef.current;
-    if (currentRef) {
-      observer.observe(currentRef);
+    return () => {
+      unsubscribe();
+    };
+  }, [image.id, subscribeToImageUpdates, handleProcessedImageUpdate]);
+
+  useEffect(() => {
+    const currentLowUrl = processedUrls.low;
+    const currentHighUrl = processedUrls.high;
+    if (currentLowUrl) {
+      console.log(`[ImageItem ${image.id}] Revoking low-res blob URL on unmount: ${currentLowUrl}`);
+      URL.revokeObjectURL(currentLowUrl);
     }
+    if (currentHighUrl) {
+      console.log(
+        `[ImageItem ${image.id}] Revoking high-res blob URL on unmount: ${currentHighUrl}`
+      );
+      URL.revokeObjectURL(currentHighUrl);
+    }
+  }, []);
 
-    return () => {
-      if (currentRef) {
-        observer.unobserve(currentRef);
-      }
-    };
-  }, [image.id, image.src, workerPool, targetWidth, targetHeight, handleProcessedImage]);
-
-  // --- Effect to Revoke Blob URLs ---
-  useEffect(() => {
-    // Create local copies of the URLs to revoke in the cleanup function
-    // Need to access the state directly inside cleanup for correct values on unmount
-    // const lowUrl = processedUrls.low;
-    // const highUrl = processedUrls.high;
-
-    // Cleanup function: Revokes the URLs ONLY when the component unmounts
-    return () => {
-      // Access the latest state values directly from the state variable
-      const currentLowUrl = processedUrls.low;
-      const currentHighUrl = processedUrls.high;
-      if (currentLowUrl) {
-        console.log(
-          `[ImageItem ${image.id}] Revoking low-res blob URL on unmount: ${currentLowUrl}`
-        );
-        URL.revokeObjectURL(currentLowUrl);
-      }
-      if (currentHighUrl) {
-        console.log(
-          `[ImageItem ${image.id}] Revoking high-res blob URL on unmount: ${currentHighUrl}`
-        );
-        URL.revokeObjectURL(currentHighUrl);
-      }
-    };
-    // Empty dependency array ensures cleanup runs only on unmount
-  }, []); // REMOVED dependencies
-
-  // Determine which src to use
-  const currentSrc = useMemo(() => {
-    // Prioritize high-res processed if available
+  const imageUrl = useMemo(() => {
+    if (hasError) return '';
     if (processedUrls.high) return processedUrls.high;
-    // Fallback to low-res processed if available
     if (processedUrls.low) return processedUrls.low;
-    // Otherwise, use the original image src
     return image.src;
-  }, [processedUrls.high, processedUrls.low, image.src]);
+  }, [image.src, processedUrls, hasError]);
 
-  // Determine if ANY processed version is being used
-  const isUsingProcessed = !!(processedUrls.high || processedUrls.low);
+  const isProcessed = !!(processedUrls.low || processedUrls.high);
 
-  // Check if we should render the image component at all
-  const shouldRenderImage = hasLowResProcessed || hasHighResProcessed || (!hasError && currentSrc);
-
-  // Callback for when the <ResponsiveImage> finishes loading the displayed src
   const handleImageLoad = useCallback(() => {
-    // If the high-res processed URL exists OR if we are directly loading the original src
-    // and it successfully loads, mark high-res as loaded.
-    if (processedUrls.high || (!hasLowResProcessed && !hasHighResProcessed)) {
+    if (imageUrl === processedUrls.high || (!processedUrls.high && imageUrl === image.src)) {
       setIsHighResLoaded(true);
+      console.log(`[ImageItem ${image.id}] High-res considered loaded:`, imageUrl);
     }
-    setHasError(false); // Clear error state on successful load
-  }, [processedUrls.high, hasLowResProcessed, hasHighResProcessed]);
+    setHasError(false);
+  }, [imageUrl, processedUrls.high, image.src]);
 
   const handleImageError = useCallback(() => {
+    console.error(`ImageItem: Failed to load image ${image.id}`, imageUrl);
     setHasError(true);
-    onImageLoadError(image.id); // Notify parent
-    // Potentially try fallback or mark as permanently failed?
-  }, [image.id, onImageLoadError]);
+    onImageLoadError(image.id);
+  }, [image.id, imageUrl, onImageLoadError]);
 
-  // Title for Tooltip
   const truncatedTitle = useMemo(
     () => truncateImageTitle(image.alt || image.title || 'Untitled'),
     [image.alt, image.title]
   );
 
-  // Conditional Rendering based on error
-  if (hasError) {
-    return null;
-  }
-
   return (
-    <div
+    <motion.div
       ref={containerRef}
-      className={styles.imageItemContainer}
-      onClick={() => !hasError && onClick(image)} // Prevent click if errored
+      className={`${styles.imageItem} group`}
+      layout
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={() => onClick(image)}
       style={{
-        width: `${targetWidth}px`,
-        height: `${targetHeight}px`,
+        position: 'relative',
+        width: `${width}px`,
+        height: `${height}px`,
+        overflow: 'hidden',
+        cursor: 'pointer',
         aspectRatio: aspectRatio,
-        position: 'relative', // Needed for absolute positioning of img
-        overflow: 'hidden', // Ensure image doesn't overflow container
-        cursor: hasError ? 'not-allowed' : 'pointer',
-        backgroundColor: placeholderColor, // Use determined placeholder color
       }}
     >
-      {/* Placeholder logic removed - background color handles it */}
+      {/* 1. Placeholder Background using AnimatePresence & motion.div */}
+      <AnimatePresence>
+        {!isHighResLoaded && !hasError && (
+          <motion.div
+            key="placeholder"
+            className={styles.placeholder}
+            style={{ '--placeholder-color': placeholderColor } as React.CSSProperties}
+            variants={placeholderVariants}
+            initial="initial"
+            exit="exit"
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Render image only if we have a src and no error, or if low-res is processed */}
-      {shouldRenderImage && (
+      {/* 2. Image Rendering (using ResponsiveImage with controlled animation) */}
+      {!hasError && imageUrl && (
         <ResponsiveImage
           ref={imageRef}
-          key={currentSrc} // Change key to force potential re-render/animation on src change
-          src={currentSrc}
-          alt={image.alt || image.id}
-          width={targetWidth} // Pass target width for potential srcSet
-          isProcessed={isUsingProcessed}
+          key={imageUrl}
+          src={imageUrl}
+          alt={image.alt}
+          width={targetWidth}
+          isProcessed={isProcessed}
           onLoad={handleImageLoad}
           onError={handleImageError}
-          className={styles.imageElement}
+          className={`${styles.imageElement}`}
+          style={{ position: 'absolute', inset: 0 }}
+          animate={isHighResLoaded ? 'animate' : 'initial'}
         />
       )}
 
-      {/* Display error indicator if needed */}
-      {hasError && (
-        <div className={styles.errorOverlay}>
-          <span>Error</span>
-        </div>
+      {/* Error Indicator (Optional) - Display if error occurred */}
+      {hasError && <div className={styles.errorIndicator}>Error</div>}
+
+      {/* Overlay Content - Keep as is */}
+      {!hasError && (
+        <motion.div
+          className={styles.overlay}
+          initial={{ opacity: 0 }}
+          whileHover={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          <p className={styles.title}>{truncateImageTitle(image.alt)}</p>
+        </motion.div>
       )}
 
-      {/* Simplified Title Overlay */}
-      <div className={styles.titleOverlay}>{truncateImageTitle(image.alt || image.id)}</div>
-
-      {/* Add group indicator if needed */}
-      {groupCount && groupCount > 1 && <div className={styles.groupIndicator}>{groupCount}</div>}
-    </div>
+      {/* Group Indicator - Keep as is */}
+      {!hasError && groupCount && groupCount > 1 && (
+        <div className={styles.groupIndicator}>{groupCount}</div>
+      )}
+    </motion.div>
   );
 };
 

@@ -1,4 +1,5 @@
-import { motion, useTransform, useViewportScroll } from 'framer-motion';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { motion } from 'framer-motion';
 import React, {
   CSSProperties,
   useCallback,
@@ -18,30 +19,27 @@ import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails';
 import 'yet-another-react-lightbox/plugins/thumbnails.css';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
-import styles from '../styles/ImageFeed.module.scss';
-import { ImageInfo, ViewMode } from '../types/index.js';
-import { truncateImageTitle } from '../utils/stringUtils.js';
-import { ImageHoverData } from './ImageItem.js';
-import ImageRow from './ImageRow.js';
-import ImageSkeleton from './ImageSkeleton.js';
-// import Lottie from 'react-lottie';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { FastAverageColor } from 'fast-average-color';
-import { default as lodashDebounce } from 'lodash/debounce';
 import { ColorContext } from '../contexts/ColorContext';
+import { useImageProcessing } from '../contexts/ImageProcessingContext';
 import { useFolderImages } from '../hooks/query/useFolderImages';
+import { usePrefetchManager } from '../hooks/usePrefetchManager.js';
 import useWindowSize from '../hooks/useWindowSize.js';
 import { loadScrollState, saveScrollState, ScrollState } from '../lib/cache/feedStateCache';
+import styles from '../styles/ImageFeed.module.scss';
+import { ImageInfo, ViewMode } from '../types/index.js';
 import AnimationSystem from '../utils/AnimationSystem';
 import {
   calculateGapSize,
   calculateLayout,
-  distributeImages,
   LayoutConfig,
   MIN_IMAGE_WIDTH,
+  RowConfig,
 } from '../utils/layoutCalculator';
-import WorkerPool from '../workers/workerPool';
+import WorkerPool, { WorkerType } from '../workers/workerPool';
 import AuraBackground from './AuraBackground';
+import { ImageHoverData } from './ImageItem.js';
+import ImageRow from './ImageRow.js';
+import ImageSkeleton from './ImageSkeleton.js';
 import { BannerView, CarouselView, MasonryView } from './views';
 
 // Simple throttle function
@@ -103,6 +101,45 @@ interface CustomStyle extends CSSProperties {
   '--ripple-strength'?: string;
 }
 
+// Interface for messages from ColorExtractorWorker
+interface ColorResultData {
+  id: string;
+  color: string | null;
+}
+
+// Interface for messages from GroupingWorker
+interface ImageGroup {
+  key: string;
+  images: ImageInfo[];
+  isCarousel: boolean;
+}
+interface GroupingResultData {
+  groupedImages: ImageGroup[];
+}
+
+// Define payload TYPESCRIPT INTERFACES for worker requests if needed for clarity,
+// but use component's internal types for results where appropriate.
+interface GroupingRequestPayload {
+  images: ImageInfo[];
+  isGrouped: boolean;
+}
+interface LayoutRequestPayload {
+  images: ImageInfo[];
+  containerWidth: number;
+  zoom: number;
+  targetRowHeight: number;
+}
+interface ColorRequestPayload {
+  id: string;
+  src: string;
+}
+// Define the TYPE for the expected successful PAYLOAD from the color worker
+// Align this with what the color worker actually sends back in its payload
+interface ColorWorkerSuccessPayload {
+  id: string;
+  color: string | null;
+}
+
 // Define the ImageFeed component
 const ImageFeed: React.FC<ImageFeedProps> = ({
   folderPath,
@@ -113,7 +150,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
 }) => {
   const {
     data: originalImages,
-    isLoading,
+    isLoading: isLoadingImages,
     isError,
     error,
     isPlaceholderData,
@@ -125,60 +162,42 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const [columns, setColumns] = useState(4);
   const [lightboxIndex, setLightboxIndex] = useState<number>(-1);
   const [lightboxImages, setLightboxImages] = useState<ImageInfo[]>([]);
-  const [rowTransforms, setRowTransforms] = useState<number[]>([]);
-  const { scrollY } = useViewportScroll();
-  const y1 = useTransform(scrollY, [0, 300], [0, 200]);
-  const y2 = useTransform(scrollY, [0, 300], [0, -200]);
   const animationSystem = useMemo(() => AnimationSystem.getInstance(), []);
   const { setDominantColors, setHoverState } = useContext(ColorContext);
-  const facRef = useRef<FastAverageColor | null>(null);
-  const lastProcessedRowIndexRef = useRef<number | null>(null);
+  const [dominantColorMap, setDominantColorMap] = useState<Map<string, string>>(new Map());
+  const requestedColorIds = useRef<Set<string>>(new Set());
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [restoredState, setRestoredState] = useState<ScrollState | null>(null);
   const previousFolderPathRef = useRef<string | null>(null);
   const rowHeightsRef = useRef<number[]>([]);
   const isRestoringScrollRef = useRef(false);
-  const velocityEMARef = useRef(0); // For smoothing velocity readings
-  const OVERSCAN_BASE = 3; // Slightly reduced base
-  const OVERSCAN_MAX = 15; // Slightly reduced max
-  const EMA_ALPHA = 0.2; // More smoothing (lower alpha = more smoothing)
-  const OVERSCAN_FACTOR = 10; // Adjust mapping sensitivity
-  const workerPool = useMemo(() => WorkerPool.getInstance(), []);
-
-  // --- Add missing useState declaration --- >
+  const velocityEMARef = useRef(0);
+  const OVERSCAN_BASE = 3;
+  const OVERSCAN_MAX = 15;
+  const EMA_ALPHA = 0.2;
+  const OVERSCAN_FACTOR = 10;
   const [dynamicOverscan, setDynamicOverscan] = useState(OVERSCAN_BASE);
-  // --- End missing useState declaration --- >
-
-  // State to track failed image IDs
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
+  const { publishImageUpdate } = useImageProcessing();
 
-  // --- Debouncing Logic for isGrouped ---
-  const [debouncedIsGrouped, setDebouncedIsGrouped] = useState(isGrouped);
+  // --- Define getImageUrl earlier --- >
+  const getImageUrl = useCallback((imagePath: string) => {
+    let path = imagePath.replace(/\\/g, '/');
+    if (path.startsWith('/api/image/') || path.startsWith('/')) {
+      return path;
+    }
+    return `/api/image/${path}`;
+  }, []); // Empty dependency array, safe to define early
 
-  // Use the renamed lodashDebounce here
-  const updateDebouncedGrouped = useCallback(
-    lodashDebounce((newValue: boolean) => {
-      setDebouncedIsGrouped(newValue);
-      console.log('[ImageFeed] Applying debounced isGrouped:', newValue);
-    }, 300),
-    []
-  );
+  // --- Memoized Images & Failed Image Handling --- >
+  const images = useMemo(() => {
+    if (!originalImages) return [];
+    return originalImages.filter(img => img && !failedImageIds.has(img.id)); // Added check for img existence
+  }, [originalImages, failedImageIds]);
 
-  // Effect to call the debounced function when the raw prop changes
-  useEffect(() => {
-    updateDebouncedGrouped(isGrouped);
-
-    // Cleanup function to cancel any pending debounced call
-    return () => {
-      updateDebouncedGrouped.cancel();
-    };
-  }, [isGrouped, updateDebouncedGrouped]);
-  // --- End Debouncing Logic ---
-
-  // Callback to report image load errors
   const handleImageLoadError = useCallback((imageId: string) => {
     setFailedImageIds(prev => {
-      if (prev.has(imageId)) return prev; // Avoid unnecessary state updates
+      if (prev.has(imageId)) return prev;
       console.log(`ImageFeed: Registering error for image ${imageId}`);
       const newSet = new Set(prev);
       newSet.add(imageId);
@@ -186,19 +205,75 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     });
   }, []);
 
+  // --- Worker Pool --- >
+  const workerPool = useMemo(() => WorkerPool.getInstance(), []);
+
+  // --- State for Worker Operations --- >
+  const [calculatedRows, setCalculatedRows] = useState<RowConfig[]>([]);
+  const [isLayoutCalculating, setIsLayoutCalculating] = useState(false);
+  const [processedGroupedImages, setProcessedGroupedImages] = useState<ImageGroup[]>([]);
+  const [isGrouping, setIsGrouping] = useState(false);
+  // Flag to track if an async operation is currently active for a worker type
+  const activeRequestRef = useRef<{ [key in WorkerType]?: boolean }>({});
+
+  // --- Layout Data Map --- >
+  const layoutDataMap = useMemo(() => {
+    const map = new Map<string, { top: number; left: number; width: number; height: number }>();
+    let currentTop = 0;
+    const gap = calculateGapSize(zoom);
+    calculatedRows.forEach(row => {
+      let currentLeft = 0;
+      row.images.forEach((img, index) => {
+        if (!row.imageWidths || row.imageWidths.length <= index) {
+          console.warn(`[ImageFeed] Missing imageWidths for image ${img.id} in row.`);
+          return; // Skip this image if width data is missing
+        }
+        const width = row.imageWidths[index];
+        map.set(img.id, {
+          top: currentTop,
+          left: currentLeft,
+          width: width,
+          height: row.height,
+        });
+        currentLeft += width + gap;
+      });
+      currentTop += row.height + gap;
+    });
+    return map;
+  }, [calculatedRows, zoom]);
+
+  // --- Initialize Prefetch Manager --- >
+  // Only initialize if we have images and the necessary layout data
+  usePrefetchManager({
+    scrollContainerRef,
+    imageList: images, // Use the filtered images
+    layoutData: layoutDataMap,
+    // We can add configuration options here later (lookaheadDistance, concurrency)
+  });
+
+  // --- Debouncing Logic for isGrouped ---
+  const [debouncedIsGrouped, setDebouncedIsGrouped] = useState(isGrouped);
+  const updateDebouncedGrouped = useCallback(
+    // Use the local debounce function now
+    debounce((newValue: boolean) => {
+      setDebouncedIsGrouped(newValue);
+      console.log('[ImageFeed] Applying debounced isGrouped:', newValue);
+    }, 300), // 300ms debounce delay
+    [] // No dependencies needed as debounce is defined outside/statically
+  );
+  useEffect(() => {
+    updateDebouncedGrouped(isGrouped);
+    // Access the cancel method correctly
+    return () => updateDebouncedGrouped.cancel();
+  }, [isGrouped, updateDebouncedGrouped]);
+
   // --- Scroll Persistence Logic ---
 
   // Debounced function to save scroll state during active scroll
   const debouncedSaveScroll = useCallback(
     debounce((path: string, scroll: number /*, heights: number[], width: number */) => {
       if (path && !isRestoringScrollRef.current) {
-        // Only save scroll position
         saveScrollState(path, scroll);
-        // saveFeedState(path, {
-        //   scrollTop: scroll,
-        //   rowHeights: heights, // REMOVED
-        //   containerWidth: width, // REMOVED
-        // });
       }
     }, 500),
     []
@@ -209,29 +284,13 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     let isMounted = true;
 
     const loadAndSetState = async () => {
-      // Use loadScrollState
       const loadedState = await loadScrollState(folderPath);
       if (isMounted) {
-        // --- Remove width validation ---
-        // const widthDifference =
-        //   containerWidth > 0 && loadedState
-        //     ? Math.abs(loadedState.containerWidth - containerWidth)
-        //     : Infinity;
-        // const isValidWidth = widthDifference < 50;
-
-        // If state exists, restore it
-        if (loadedState /* && isValidWidth */) {
+        if (loadedState) {
           setRestoredState(loadedState);
           isRestoringScrollRef.current = true;
         } else {
-          // --- Remove width mismatch logging ---
-          // if (!isValidWidth && loadedState) {
-          //   console.warn(
-          //     `Invalidating cached state for ${folderPath} due to width mismatch. Cached: ${loadedState.containerWidth}, Current: ${containerWidth}`
-          //   );
-          // }
           setRestoredState(null);
-          // Set scroll to top only if no state is being restored
           if (scrollContainerRef.current) {
             scrollContainerRef.current.scrollTop = 0;
           }
@@ -240,10 +299,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       }
     };
 
-    // Load state immediately, don't wait for containerWidth
-    // if (containerWidth > 0) {
     loadAndSetState();
-    // }
 
     const currentPathForCleanup = folderPath;
     previousFolderPathRef.current = currentPathForCleanup;
@@ -253,44 +309,39 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       const scrollElement = scrollContainerRef.current;
       const folderToSave = previousFolderPathRef.current;
 
-      // Only save if layout seems ready (rowHeightsRef has items)
       if (scrollElement && folderToSave && rowHeightsRef.current.length > 0) {
-        // --- Only save scrollTop --- >
-        // const currentState: Omit<FeedState, 'timestamp'> = {
-        //   scrollTop: scrollElement.scrollTop,
-        //   rowHeights: rowHeightsRef.current,
-        //   containerWidth: containerWidth,
-        // };
-        // saveFeedState(folderToSave, currentState);
         saveScrollState(folderToSave, scrollElement.scrollTop);
       }
 
       debouncedSaveScroll.cancel?.();
-      // --- ADD CANCELLATION ON UNMOUNT --- >
-      console.log('ImageFeed: Unmounting, cancelling pending tasks.');
-      workerPool.cancelPendingTasks();
+      // --- Cancel All Pending Worker Tasks on Unmount --- >
+      console.log('ImageFeed: Unmounting, cancelling all pending worker tasks.');
+      workerPool.cancelAllPendingTasks();
+      // No need to remove listeners here as they are not used for request/response
     };
-    // Remove containerWidth from dependencies, load immediately
-  }, [folderPath, scrollContainerRef, debouncedSaveScroll, workerPool]);
-
+  }, [
+    folderPath,
+    scrollContainerRef,
+    debouncedSaveScroll,
+    workerPool, // Add workerPool as dependency for cleanup
+  ]);
   // --- End Scroll Persistence Logic ---
 
-  // Calculate average aspect ratio for fallback estimation
+  // --- Compute Stable Keys for Memoization --- >
+  const imagesKey = useMemo(() => images.map(i => i.id).join('|'), [images]);
+
+  // --- Avg Aspect Ratio & Layout Metrics (unchanged) --- >
   const avgAspectRatio = useMemo(() => {
     if (!originalImages || originalImages.length === 0) return 1; // Default aspect ratio
-
     const validImages = originalImages.filter(img => img && img.width > 0 && img.height > 0);
     if (validImages.length === 0) return 1;
-
     const totalRatio = validImages.reduce((sum, img) => sum + img.width / img.height, 0);
     return totalRatio / validImages.length;
   }, [originalImages]);
 
-  // Calculate layout metrics (using helper function for clarity if needed)
   const layoutMetrics = useMemo(() => {
     const gapSize = calculateGapSize(zoom);
     let estimatedRowHeightFallback = 200; // Default
-    // Potentially more complex calculation as in pasted version if needed
     if (containerWidth > 0 && columns > 0 && avgAspectRatio > 0) {
       const totalGapWidth = Math.max(0, columns - 1) * gapSize;
       const availableWidthForImages = Math.max(0, containerWidth - totalGapWidth);
@@ -308,211 +359,274 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     };
   }, [containerWidth, columns, zoom, avgAspectRatio]);
 
-  // Reset states when folder or view mode changes
+  // --- Memoize Layout Inputs --- >
+  const layoutInputs = useMemo(
+    () => ({
+      imagesKey,
+      containerWidth,
+      zoom,
+      viewMode,
+      isGrouped: debouncedIsGrouped,
+      // Include estimated height as it affects the worker call
+      targetRowHeight: layoutMetrics.estimatedRowHeightFallback,
+    }),
+    [
+      imagesKey,
+      containerWidth,
+      zoom,
+      viewMode,
+      debouncedIsGrouped,
+      layoutMetrics.estimatedRowHeightFallback,
+    ]
+  );
+
+  // --- UPDATED: Reset/Cancel Effect --- >
   useEffect(() => {
     setLightboxIndex(-1);
     setLightboxImages([]);
-    lastProcessedRowIndexRef.current = null;
-    setDominantColors([]);
+    setDominantColorMap(new Map());
+    requestedColorIds.current.clear();
     setFailedImageIds(new Set());
+    setCalculatedRows([]);
+    setIsLayoutCalculating(false); // Reset loading state
+    setProcessedGroupedImages([]);
+    setIsGrouping(false); // Reset loading state
+
     console.log(
-      `ImageFeed: ${folderPath ? 'Folder' : 'ViewMode/Group'} changed, cancelling pending tasks.`
+      `ImageFeed: Deps changed (${folderPath}/${viewMode}/${isGrouped}/${zoom}), cancelling pending worker tasks.`
     );
-    workerPool.cancelPendingTasks();
-  }, [folderPath, viewMode, isGrouped, setDominantColors, workerPool]);
+    // Cancel tasks related to the previous state
+    workerPool.cancelAllPendingTasks();
+    activeRequestRef.current = {}; // Reset active request flags
+  }, [folderPath, viewMode, isGrouped, zoom, workerPool]); // isGrouped and zoom trigger cancellation now
 
-  // --- ADD CANCELLATION ON ZOOM CHANGE --- >
-  useEffect(() => {
-    console.log('ImageFeed: Zoom changed, cancelling pending tasks.');
-    workerPool.cancelPendingTasks();
-  }, [zoom, workerPool]);
-
-  // Initialize FAC instance on mount
-  useEffect(() => {
-    facRef.current = new FastAverageColor();
-    return () => {
-      facRef.current?.destroy?.();
-    };
-  }, []);
-
-  // --- Container Width Management ---
-
-  // Shared function to update width and columns
-  const updateContainerWidth = useCallback(() => {
+  // --- Container Width Management (UPDATED: Use debounce) --- >
+  const updateContainerWidthInternal = useCallback(() => {
     if (!feedRef.current) return;
-
     const rect = feedRef.current.getBoundingClientRect();
     const newWidth = Math.max(MIN_IMAGE_WIDTH, rect.width);
-
-    // Check if width actually changed before updating state
     setContainerWidth(prevWidth => {
       if (newWidth !== prevWidth) {
-        // Recalculate layout columns based on the new width
         const config: LayoutConfig = {
           containerWidth: newWidth,
           zoom,
           viewMode,
-          isGrouped: debouncedIsGrouped,
+          isGrouped: debouncedIsGrouped, // Use debounced value here
         };
         const layout = calculateLayout(config);
-        // Update columns directly here if needed, or rely on layoutMetrics memo
         setColumns(layout.columns);
         return newWidth;
       }
-      return prevWidth; // Return previous width if no change
+      return prevWidth;
     });
-  }, [zoom, viewMode, debouncedIsGrouped, updateDebouncedGrouped]); // Dependencies are things used *inside* the function
+  }, [zoom, viewMode, debouncedIsGrouped]); // Keep dependencies of the internal logic
 
-  // Use useLayoutEffect for the *initial* measurement before paint
+  // --- Memoize the debounced function --- >
+  const debouncedUpdateContainerWidth = useMemo(
+    () => debounce(updateContainerWidthInternal, 100), // 100ms debounce
+    [updateContainerWidthInternal] // Recreate debounce only if internal logic changes
+  );
+
+  // --- Use the debounced function in effects --- >
   useLayoutEffect(() => {
-    updateContainerWidth();
-  }, [updateContainerWidth]); // Re-run if the function identity changes (due to its deps)
+    // Run immediately on mount
+    updateContainerWidthInternal();
+    // Ensure cleanup cancels the debounced call
+    return () => debouncedUpdateContainerWidth.cancel();
+  }, [updateContainerWidthInternal, debouncedUpdateContainerWidth]); // Add debounced func to deps
 
-  // Use useEffect for setting up listeners for *subsequent* updates
   useEffect(() => {
-    // Add resize observer for more accurate width updates
-    const resizeObserver = new ResizeObserver(updateContainerWidth);
+    const resizeObserver = new ResizeObserver(debouncedUpdateContainerWidth); // Use debounced version
     if (feedRef.current) {
       resizeObserver.observe(feedRef.current);
     }
-
-    // Use standard resize listener as a fallback or additional trigger
-    window.addEventListener('resize', updateContainerWidth);
-
-    // Cleanup listeners on unmount
+    // Still use the debounced version for window resize
+    window.addEventListener('resize', debouncedUpdateContainerWidth);
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener('resize', updateContainerWidth);
+      window.removeEventListener('resize', debouncedUpdateContainerWidth);
+      debouncedUpdateContainerWidth.cancel(); // Cancel on unmount
     };
-    // This effect only needs to run once to set up listeners
-    // updateContainerWidth is stable due to useCallback
-  }, [updateContainerWidth]);
-
+  }, [debouncedUpdateContainerWidth]); // Depend only on the stable debounced function reference
   // --- End Container Width Management ---
 
-  // Filter out images that failed to load *before* grouping/layout
-  const images = useMemo(() => {
-    if (!originalImages) return [];
-    return originalImages.filter(img => !failedImageIds.has(img.id));
-  }, [originalImages, failedImageIds]);
+  // --- Effect for Pre-fetching Placeholder Colors (Now safe to use getImageUrl) --- >
+  useEffect(() => {
+    if (images && images.length > 0 && !isLoadingImages) {
+      const initialImageCount = Math.min(images.length, 30);
+      console.log(`[ImageFeed] Pre-fetching colors for initial ${initialImageCount} images...`);
 
-  // Modified groupedImages calculation (uses filtered images)
-  const groupedImages = useMemo(() => {
-    console.time('groupedImages calculation'); // Start perf timer
-    if (!Array.isArray(images) || images.length === 0) {
-      console.timeEnd('groupedImages calculation');
-      return [];
-    }
-
-    const validImages = images.filter(
-      image =>
-        image &&
-        typeof image === 'object' &&
-        'width' in image &&
-        'height' in image &&
-        image.width > 0 &&
-        image.height > 0
-    );
-
-    if (!debouncedIsGrouped) {
-      const result = validImages.map(image => ({
-        key: image.id,
-        images: [image],
-        isCarousel: false,
-      }));
-      console.timeEnd('groupedImages calculation');
-      return result;
-    }
-
-    // --- Optimized Grouping Logic ---
-    // 1. Pre-compute processed titles
-    console.time('groupedImages - precompute titles');
-    const processedTitles = new Map<string, string>();
-    validImages.forEach(image => {
-      // Store by image.id -> processedTitle
-      processedTitles.set(image.id, truncateImageTitle(image.alt));
-    });
-    console.timeEnd('groupedImages - precompute titles');
-
-    // 2. Group using pre-computed titles
-    console.time('groupedImages - grouping loop');
-    const groups: { [key: string]: ImageInfo[] } = {};
-    validImages.forEach(image => {
-      const processedTitle = processedTitles.get(image.id) || 'Untitled'; // Get pre-computed title
-      if (!groups[processedTitle]) {
-        groups[processedTitle] = [];
+      for (let i = 0; i < initialImageCount; i++) {
+        const imageInfo = images[i];
+        if (
+          imageInfo &&
+          imageInfo.id &&
+          imageInfo.src &&
+          !dominantColorMap.has(imageInfo.id) &&
+          !requestedColorIds.current.has(imageInfo.id)
+        ) {
+          const imageUrl = getImageUrl(imageInfo.src); // Now defined
+          requestedColorIds.current.add(imageInfo.id);
+          // ... (rest of the postRequest logic)
+          workerPool
+            .postRequest<ColorRequestPayload, ColorWorkerSuccessPayload>(
+              'color',
+              'extractColor',
+              { id: imageInfo.id, src: imageUrl },
+              { priority: 2 }
+            )
+            .then(result => {
+              // ... (update map)
+            })
+            .catch(error => {
+              // ... (log error)
+            })
+            .finally(() => {
+              requestedColorIds.current.delete(imageInfo.id);
+            });
+        }
       }
-      groups[processedTitle].push(image);
-    });
-    console.timeEnd('groupedImages - grouping loop');
+    }
+  }, [images, isLoadingImages, workerPool, getImageUrl]); // Keep getImageUrl in deps
 
-    // 3. Convert groups object to array
-    console.time('groupedImages - convert to array');
-    const result = Object.entries(groups).map(([key, group]) => ({
-      key,
-      images: group,
-      isCarousel: group.length > 1,
-    }));
-    console.timeEnd('groupedImages - convert to array');
-    // --- End Optimized Grouping Logic ---
-
-    console.timeEnd('groupedImages calculation'); // End overall perf timer
-    return result;
-  }, [images, debouncedIsGrouped]); // Dependencies remain the same
-
-  // Enhanced groupedRows calculation (uses filtered images via groupedImages)
-  const groupedRows = useMemo(() => {
-    if (!containerWidth || groupedImages.length === 0 || viewMode !== ViewMode.GRID) return [];
-
-    const firstImages = groupedImages
-      .map(group => group.images[0])
-      .filter(image => image && image.width > 0 && image.height > 0);
-
-    if (firstImages.length === 0) return [];
-
-    return distributeImages(
-      firstImages,
+  // --- Combined Grouping & Layout Worker Trigger (Based on Memoized Inputs) --- >
+  useEffect(() => {
+    // Destructure inputs for clarity inside the effect
+    const {
+      imagesKey, // Used implicitly by `images` dependency below
       containerWidth,
       zoom,
-      layoutMetrics.estimatedRowHeightFallback
-    );
-  }, [groupedImages, zoom, containerWidth, viewMode, layoutMetrics.estimatedRowHeightFallback]); // Depends on groupedImages
+      viewMode,
+      isGrouped,
+      targetRowHeight,
+    } = layoutInputs;
 
-  // Define the useEffect that updates rowHeightsRef HERE, AFTER groupedRows
+    console.log(
+      '[ImageFeed] Layout inputs changed. Triggering group/layout pipeline...',
+      layoutInputs
+    );
+
+    // Cancel any previous pipeline runs
+    // Note: cancelAllPendingTasks might be too broad if other workers run independently.
+    // If needed, use specific cancel functions (e.g., cancelPendingLayoutTasks).
+    workerPool.cancelAllPendingTasks();
+    activeRequestRef.current = {}; // Reset active flags
+    setIsGrouping(true); // Indicate start of pipeline
+    if (viewMode === ViewMode.GRID) {
+      setIsLayoutCalculating(true);
+    }
+
+    // Define the pipeline
+    const runPipeline = async () => {
+      try {
+        // 1. Grouping
+        console.log('[ImageFeed] Pipeline: Requesting grouping...');
+        const groupingResult = await workerPool.postRequest<
+          GroupingRequestPayload,
+          { groupedImages: ImageGroup[] }
+        >(
+          'grouping',
+          'groupImages',
+          { images: images, isGrouped: isGrouped }, // Use current images and isGrouped from layoutInputs
+          { priority: 9 }
+        );
+        console.log('[ImageFeed] Pipeline: Received grouping result.');
+        // Update grouping state immediately (or batch if using batch hook)
+        setProcessedGroupedImages(groupingResult.groupedImages);
+        setIsGrouping(false);
+
+        // 2. Layout (only if GRID view and grouping succeeded)
+        if (viewMode === ViewMode.GRID) {
+          const firstImages = groupingResult.groupedImages
+            .map(group => group.images[0])
+            .filter(image => image && image.width > 0 && image.height > 0);
+
+          if (firstImages.length > 0 && containerWidth > 0) {
+            console.log('[ImageFeed] Pipeline: Requesting layout...');
+            const layoutResult = await workerPool.postRequest<LayoutRequestPayload, RowConfig[]>(
+              'layout',
+              'calculateLayout',
+              {
+                images: firstImages,
+                containerWidth,
+                zoom,
+                targetRowHeight,
+              },
+              { priority: 10 }
+            );
+            console.log('[ImageFeed] Pipeline: Received layout result.');
+            // Update layout state (or batch)
+            setCalculatedRows(layoutResult);
+          } else {
+            console.log(
+              '[ImageFeed] Pipeline: Skipping layout (no valid first images or zero width).'
+            );
+            setCalculatedRows([]); // Clear layout if skipped
+          }
+        } else {
+          setCalculatedRows([]); // Clear layout if not in GRID view
+        }
+      } catch (error) {
+        // Handle errors from either worker
+        console.error('[ImageFeed] Pipeline error:', error);
+        setProcessedGroupedImages([]);
+        setCalculatedRows([]);
+      } finally {
+        // Reset loading flags regardless of success/error
+        setIsGrouping(false);
+        setIsLayoutCalculating(false);
+        // Clear active refs (might need more granular control if tasks overlap)
+        activeRequestRef.current = {};
+      }
+    };
+
+    // Only run the pipeline if we have images and a valid container width
+    if (images && images.length > 0 && containerWidth > 0) {
+      runPipeline();
+    } else {
+      // If no images or width, clear states and loading flags
+      console.log('[ImageFeed] Skipping pipeline (no images or zero width).');
+      setProcessedGroupedImages([]);
+      setCalculatedRows([]);
+      setIsGrouping(false);
+      setIsLayoutCalculating(false);
+      activeRequestRef.current = {};
+    }
+
+    // Cleanup: Cancellation is handled at the start of the effect
+    // and on unmount by the main cleanup effect.
+  }, [layoutInputs, images, workerPool]); // Depend on memoized inputs, images array identity, and workerPool instance
+
+  // Define the useEffect that updates rowHeightsRef HERE, AFTER calculatedRows state
   useEffect(() => {
-    if (viewMode === ViewMode.GRID && groupedRows && groupedRows.length > 0) {
-      rowHeightsRef.current = groupedRows.map(row => row.height);
+    if (viewMode === ViewMode.GRID && calculatedRows && calculatedRows.length > 0) {
+      rowHeightsRef.current = calculatedRows.map(row => row.height);
     } else {
       rowHeightsRef.current = [];
     }
-  }, [groupedRows, viewMode, folderPath]);
+  }, [calculatedRows, viewMode, folderPath]);
 
   // Handle image overflow (wrapped in useCallback)
   const handleImageOverflow = useCallback((image: ImageInfo) => {
     console.warn('Image overflow detected:', image.id);
-    // Implement any necessary overflow handling logic here
-  }, []); // No dependencies needed if it only uses console
+  }, []);
 
   // Update handleImageClick to work with grouped images and set lightbox plugins (wrapped in useCallback)
   const handleImageClick = useCallback(
     (clickedImage: ImageInfo) => {
-      // Find the group the clicked image belongs to
-      const groupIndex = groupedImages.findIndex(group =>
+      const groupIndex = processedGroupedImages.findIndex(group =>
         group.images.some(img => img.id === clickedImage.id)
       );
-
       if (groupIndex !== -1) {
-        const group = groupedImages[groupIndex];
-        // Find the index of the clicked image WITHIN that group
+        const group = processedGroupedImages[groupIndex];
         const imageIndexInGroup = group.images.findIndex(img => img.id === clickedImage.id);
-
         if (imageIndexInGroup !== -1) {
-          setLightboxImages(group.images); // Set the images for the lightbox
-          setLightboxIndex(imageIndexInGroup); // Set the index WITHIN the group
+          setLightboxImages(group.images);
+          setLightboxIndex(imageIndexInGroup);
         }
       }
     },
-    [groupedImages, setLightboxImages, setLightboxIndex] // Add state setters to dependencies
+    [processedGroupedImages]
   );
 
   // --- Scroll Velocity and Dynamic Overscan --- >
@@ -529,22 +643,14 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     const scrollDelta = scrollTop - lastScrollTopRef.current;
 
     if (timeDelta > 10) {
-      // Avoid division by zero or tiny intervals
-      const velocity = Math.abs(scrollDelta) / timeDelta; // Pixels per millisecond
-      // Update EMA velocity
+      const velocity = Math.abs(scrollDelta) / timeDelta;
       velocityEMARef.current = EMA_ALPHA * velocity + (1 - EMA_ALPHA) * velocityEMARef.current;
-
-      // Calculate dynamic overscan based on smoothed velocity
       const calculatedOverscan =
         OVERSCAN_BASE +
         Math.min(velocityEMARef.current * OVERSCAN_FACTOR, OVERSCAN_MAX - OVERSCAN_BASE);
       setDynamicOverscan(Math.round(calculatedOverscan));
-
-      // Update refs for next calculation
       lastScrollTopRef.current = scrollTop;
       lastScrollTimeRef.current = now;
-
-      // Trigger debounced save (if still needed)
       debouncedSaveScroll(folderPath, scrollTop);
     }
   }, [scrollContainerRef, folderPath, debouncedSaveScroll]);
@@ -563,17 +669,16 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
 
   // --- Virtualization Setup ---
   const rowVirtualizer = useVirtualizer({
-    count: groupedRows.length,
+    count: calculatedRows.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: useCallback(
       (index: number) => {
-        // Always fallback to calculated or estimated height
-        const rowHeight = groupedRows[index]?.height ?? layoutMetrics.estimatedRowHeightFallback;
+        const rowHeight = calculatedRows[index]?.height ?? layoutMetrics.estimatedRowHeightFallback;
         return rowHeight + layoutMetrics.gapSize;
       },
-      [groupedRows, layoutMetrics.estimatedRowHeightFallback, layoutMetrics.gapSize, viewMode]
+      [calculatedRows, layoutMetrics.estimatedRowHeightFallback, layoutMetrics.gapSize]
     ),
-    overscan: dynamicOverscan, // Use dynamic overscan state
+    overscan: dynamicOverscan,
   });
 
   // Remeasure rows whenever zoom, containerWidth, row count, row height fallback, gap size, view mode, or grouping changes
@@ -582,12 +687,13 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   }, [
     zoom,
     containerWidth,
-    groupedRows.length,
+    calculatedRows.length,
     layoutMetrics.estimatedRowHeightFallback,
     layoutMetrics.gapSize,
     viewMode,
     debouncedIsGrouped,
     folderPath,
+    rowVirtualizer,
   ]);
 
   // Get the virtual items to render
@@ -627,15 +733,16 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       if (data.isHovering) {
         // Set a timeout to activate hover state after a delay
         hoverTimeoutRef.current = setTimeout(() => {
-          // Pass the relevant data to context
-          setHoverState({ isHovering: true, position: data.position, color: data.color });
+          // Get color from the state map if available
+          const color = dominantColorMap.get(data.imageId) || null;
+          setHoverState({ isHovering: true, position: data.position, color: color });
         }, 150); // 150ms delay
       } else {
         // If mouse leaves, immediately deactivate hover state
         setHoverState({ isHovering: false, position: null, color: null });
       }
     },
-    [setHoverState] // Dependency remains setHoverState
+    [setHoverState, dominantColorMap] // Dependency remains setHoverState
   );
 
   // Cleanup timeout on unmount
@@ -648,30 +755,180 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     };
   }, []); // Empty dependency array ensures this runs only on mount and unmount
 
-  // Callback function to get the correct image URL
-  const getImageUrl = useCallback((imagePath: string) => {
-    // 1. Replace backslashes with forward slashes
-    let path = imagePath.replace(/\\/g, '/');
-    // 2. Check if it already starts with '/api/image/' or just '/'. If so, use it directly.
-    if (path.startsWith('/api/image/') || path.startsWith('/')) {
-      // Assume it's already a usable path
-      return path;
+  // --- Color Extraction Worker Integration (Add Priority for visible items) --- >
+  useEffect(() => {
+    // Only run if we have virtual items and rows calculated
+    if (virtualItems.length === 0 || calculatedRows.length === 0 || images.length === 0) {
+      return;
     }
-    // 3. Otherwise, prepend the API prefix
-    return `/api/image/${path}`;
-  }, []);
 
-  // Enhanced renderContent using virtualization for GRID view
+    const visibleImageIds = new Set<string>();
+    virtualItems.forEach(virtualItem => {
+      const row = calculatedRows[virtualItem.index];
+      row?.images.forEach(img => visibleImageIds.add(img.id));
+    });
+
+    // Track promises for colors requested in this pass
+    const colorPromises: Promise<void>[] = [];
+
+    visibleImageIds.forEach(id => {
+      if (!dominantColorMap.has(id) && !requestedColorIds.current.has(id)) {
+        const imageInfo = images.find(img => img.id === id);
+        if (imageInfo?.src) {
+          const imageUrl = getImageUrl(imageInfo.src);
+          requestedColorIds.current.add(id);
+
+          const promise = workerPool
+            .postRequest<ColorRequestPayload, ColorWorkerSuccessPayload>(
+              'color',
+              'extractColor',
+              {
+                id: imageInfo.id,
+                src: imageUrl,
+              },
+              { priority: 1 }
+            )
+            .then(result => {
+              // Check result and specifically if color is a non-null string
+              if (result && typeof result.color === 'string') {
+                // Assign to a new variable to help TS with type narrowing inside the setter
+                const colorValue: string = result.color;
+                setDominantColorMap(prevMap => {
+                  const newMap = new Map(prevMap);
+                  // Use the explicitly typed colorValue
+                  newMap.set(result.id, colorValue);
+                  return newMap;
+                });
+              } else {
+                // console.log(`[ImageFeed] Color extraction failed or null for ${result?.id}`);
+              }
+            })
+            .catch(error => {
+              console.error(`[ImageFeed] Color worker request failed for image ID ${id}:`, error);
+            })
+            .finally(() => {
+              requestedColorIds.current.delete(id);
+            });
+
+          colorPromises.push(promise);
+        }
+      }
+    });
+
+    // After processing all visible items in this pass, update the context
+    // Use Promise.allSettled to wait for all requests in this batch to finish
+    // before updating context, preventing rapid flickering.
+    if (colorPromises.length > 0) {
+      Promise.allSettled(colorPromises).then(() => {
+        // Re-calculate visible colors *after* potential map updates
+        const currentVisibleColors: string[] = [];
+        virtualItems.forEach(virtualItem => {
+          const row = calculatedRows[virtualItem.index];
+          row?.images.forEach(img => {
+            // Read from the potentially updated dominantColorMap state
+            const itemColor = dominantColorMap.get(img.id);
+            if (itemColor) {
+              currentVisibleColors.push(itemColor);
+            }
+          });
+        });
+        // Update context with the first 1 or 2 valid visible colors
+        if (currentVisibleColors.length > 0) {
+          // console.log('[ImageFeed] Updating context dominantColors after batch:', currentVisibleColors.slice(0, 2));
+          setDominantColors(currentVisibleColors.slice(0, 2));
+        } else {
+          // console.log('[ImageFeed] No dominant colors found after batch, resetting context.');
+          setDominantColors([]); // Reset if no colors found
+        }
+      });
+    } else {
+      // If no new colors were requested, still update context based on current visible colors
+      // This handles scrolling without new requests
+      const currentVisibleColors: string[] = [];
+      virtualItems.forEach(virtualItem => {
+        const row = calculatedRows[virtualItem.index];
+        row?.images.forEach(img => {
+          const itemColor = dominantColorMap.get(img.id);
+          if (itemColor) {
+            currentVisibleColors.push(itemColor);
+          }
+        });
+      });
+      if (currentVisibleColors.length > 0) {
+        // console.log('[ImageFeed] Updating context dominantColors (no new requests):', currentVisibleColors.slice(0, 2));
+        setDominantColors(currentVisibleColors.slice(0, 2));
+      } else {
+        // console.log('[ImageFeed] No dominant colors found (no new requests), resetting context.');
+        setDominantColors([]); // Reset if no colors found
+      }
+    }
+
+    // Cleanup: No specific listener removal needed here.
+    // Cancellation is handled by the main dependency change effect.
+  }, [
+    workerPool,
+    virtualItems, // Re-run when visible items change
+    calculatedRows, // Re-run if row layout changes
+    images, // Re-run if images change
+    getImageUrl,
+    dominantColorMap, // Re-run if the map updates (to potentially update context)
+    setDominantColors, // Context setter
+  ]);
+  // --- End Color Extraction Worker Integration ---
+
+  // --- Effect to set the publisher on the ImageProcessor --- >
+  useEffect(() => {
+    const processor = workerPool.getImageProcessor();
+    // Check if the processor has the setPublisher method (for safety)
+    if (processor && typeof (processor as any).setPublisher === 'function') {
+      (processor as any).setPublisher(publishImageUpdate);
+    } else {
+      console.warn('[ImageFeed] ImageProcessor instance not found or setPublisher method missing.');
+    }
+    // No cleanup needed for this specifically, publisher is set once
+    // Dependencies ensure it runs if publisher or processor instance changes
+  }, [workerPool, publishImageUpdate]);
+
+  // --- Render Logic --- >
   const renderContent = () => {
     const { gapSize } = layoutMetrics;
     if (!containerWidth) return null;
-    const currentImages = images ?? [];
-    const MotionWrapper = motion.div;
 
-    // Determine if we should show skeletons (initial load)
-    const showSkeletons = isLoading && !isPlaceholderData;
+    const showLoadingState =
+      isLoadingImages || isGrouping || (viewMode === ViewMode.GRID && isLayoutCalculating);
 
-    // Handle non-GRID view modes
+    // --- Render Dynamic Skeletons during Loading --- >
+    if (showLoadingState && viewMode === ViewMode.GRID) {
+      return (
+        <div
+          className={styles.gridContainer} // Use a container for skeleton layout
+          style={{
+            gap: `${gapSize}px`,
+            // Basic grid layout for skeletons based on current column count
+            // Note: This won't perfectly match the final layout worker result,
+            // but provides a reasonable placeholder structure.
+            display: 'grid',
+            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+            padding: gapSize / 2, // Optional padding similar to final layout
+          }}
+        >
+          {(images ?? []).map(image => {
+            if (!image || image.width <= 0 || image.height <= 0) return null; // Skip invalid images
+            const color = dominantColorMap.get(image.id);
+            return (
+              <ImageSkeleton
+                key={`skeleton-${image.id}`}
+                containerWidth={image.width} // Use actual image dimensions
+                containerHeight={image.height}
+                placeholderColor={color} // Pass fetched color
+              />
+            );
+          })}
+        </div>
+      );
+    }
+
+    // Handle non-GRID view modes (pass raw images)
     if (viewMode !== ViewMode.GRID) {
       let ViewComponent;
       switch (viewMode) {
@@ -687,74 +944,76 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
         default:
           return null;
       }
-      // Placeholder: Add transitions/loading for non-grid views if needed
-      return <ViewComponent images={currentImages} zoom={zoom} />;
+      // Ensure non-grid views also receive potentially filtered images
+      return <ViewComponent images={images} zoom={zoom} />;
     }
 
-    // --- GRID View Logic with Virtualization --- //
-
-    // Show skeletons only on initial load for GRID view
-    if (showSkeletons) {
-      // We might need a wrapper here if renderSkeletons doesn't provide one
-      // Use the calculated metrics for skeletons
-      return renderSkeletons();
-    }
-
-    // Render the virtualized list when data is ready
-    return (
-      <div // Outer container: Sets the total scrollable height
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-      >
-        <div // Inner container: Absolutely positioned items are placed here
+    // --- Render Final Virtualized GRID View --- >
+    // Only render if *not* in loading state and rows are calculated
+    if (!showLoadingState && calculatedRows.length > 0) {
+      return (
+        <div // Outer container: Sets the total scrollable height
           style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
             width: '100%',
-            position: 'relative', // Often needed for absolute children
+            position: 'relative',
           }}
         >
-          {virtualItems.map(virtualItem => {
-            const row = groupedRows[virtualItem.index];
-            if (!row) return null; // Should not happen if count is correct
-
-            return (
-              <div // Wrapper for each virtual row with positioning
-                key={virtualItem.key}
-                data-index={virtualItem.index}
-                ref={rowVirtualizer.measureElement} // Optional: for dynamic height measurement
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualItem.size}px`,
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                <ImageRow
-                  // Pass necessary props down
-                  images={row.images}
-                  imageWidths={row.imageWidths ?? []}
-                  onImageClick={handleImageClick}
-                  columns={columns}
-                  zoom={zoom}
-                  isLastRow={virtualItem.index === groupedRows.length - 1}
-                  rowHeight={row.height}
-                  groupedImages={groupedImages}
-                  workerPool={workerPool}
-                  gap={gapSize} // Use calculated gapSize
-                  containerWidth={containerWidth}
-                  onImageHover={handleImageHover}
-                  onImageLoadError={handleImageLoadError}
-                />
-              </div>
-            );
-          })}
+          <div // Inner container: Absolutely positioned items are placed here
+            style={{
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualItems.map(virtualItem => {
+              const row = calculatedRows[virtualItem.index];
+              if (!row) return null;
+              return (
+                <motion.div // Wrapper with animation
+                  key={virtualItem.key}
+                  layout
+                  transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+                  data-index={virtualItem.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: virtualItem.size,
+                    y: virtualItem.start,
+                  }}
+                >
+                  <ImageRow
+                    // Pass necessary props down
+                    images={row.images}
+                    imageWidths={row.imageWidths ?? []}
+                    onImageClick={handleImageClick}
+                    columns={columns}
+                    zoom={zoom}
+                    isLastRow={virtualItem.index === calculatedRows.length - 1}
+                    rowHeight={row.height}
+                    // Pass processedGroupedImages down for context (e.g., carousel indicator)
+                    groupedImages={processedGroupedImages}
+                    workerPool={workerPool}
+                    gap={gapSize}
+                    containerWidth={containerWidth}
+                    onImageHover={handleImageHover}
+                    onImageLoadError={handleImageLoadError}
+                    // Pass the color map down to ImageRow/ImageItem if needed
+                    dominantColorMap={dominantColorMap}
+                  />
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
+
+    // Fallback if still loading but not caught above, or rows aren't ready
+    // Can render a simpler spinner or nothing
+    return null; // Or a loading indicator
   };
 
   // Lightbox configuration
@@ -772,90 +1031,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     }));
   }, [lightboxImages, getImageUrl]);
 
-  // --- Color Extraction Logic ---
-
-  // Debounced function to update context
-  const debouncedSetContextColor = useCallback(
-    debounce(async (imageUrl: string | null) => {
-      if (!imageUrl || !facRef.current) return;
-      try {
-        // Ensure getImageUrl provides full path or handle relative paths
-        const color = await facRef.current.getColorAsync(imageUrl);
-        if (color.hex) {
-          setDominantColors([color.hex]); // Update context with the single dominant color
-        }
-      } catch (e) {
-        console.error('Error getting average color:', e);
-      }
-    }, 300), // Debounce delay (ms)
-    [setDominantColors, getImageUrl] // Added getImageUrl dependency
-  );
-
-  // Effect to set initial color on first load
-  useEffect(() => {
-    if (images && images.length > 0 && lastProcessedRowIndexRef.current === null) {
-      const firstImage = images[0];
-      if (firstImage?.src) {
-        const imageUrl = getImageUrl(firstImage.src); // Use helper
-        // Call directly without debounce for initial set
-        void (async () => {
-          if (!imageUrl || !facRef.current) return;
-          try {
-            const color = await facRef.current.getColorAsync(imageUrl);
-            if (color.hex) {
-              setDominantColors([color.hex]);
-              lastProcessedRowIndexRef.current = 0; // Mark first row as processed
-            }
-          } catch (e) {
-            console.error('Error getting initial average color:', e);
-          }
-        })();
-      }
-    }
-    // Run only when images are first loaded or getImageUrl changes
-  }, [images, getImageUrl, setDominantColors]);
-
-  // --- Render Skeletons --- (Copied from pasted version, uses layoutMetrics)
-  const renderSkeletons = useCallback(() => {
-    // Use pre-calculated metrics
-    const { gapSize } = layoutMetrics;
-    // Estimate width/height based on columns and aspect ratio - needs refinement if possible
-    const approxWidth =
-      containerWidth > 0 && columns > 0 ? containerWidth / columns - gapSize : 200;
-    const approxHeight = avgAspectRatio > 0 ? approxWidth / avgAspectRatio : 150;
-
-    const skeletonCount = columns * 5; // Estimate: 5 rows of skeletons
-
-    // Return null if dimensions are invalid
-    if (approxWidth <= 0 || approxHeight <= 0) {
-      return null;
-    }
-
-    return (
-      <motion.div
-        key="skeleton-grid"
-        className={styles.gridContainer} // Use gridContainer for layout?
-        style={{
-          gap: `${gapSize}px`, // Apply gap for skeleton layout
-          // gridTemplateColumns: `repeat(${columns}, 1fr)` // Example if using CSS grid
-        }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-      >
-        {Array.from({ length: skeletonCount }).map((_, i) => (
-          <ImageSkeleton
-            key={`skeleton-${i}`}
-            containerWidth={Math.round(approxWidth)}
-            containerHeight={Math.round(approxHeight)}
-          />
-        ))}
-      </motion.div>
-    );
-  }, [columns, layoutMetrics, containerWidth, avgAspectRatio, styles.gridContainer]); // Dependencies
-
-  // Handle Error State
+  // --- Render Logic --- > Restored Error/Empty/Main return
   if (isError) {
     return (
       <div ref={feedRef} className={`${styles.container} ${styles.error}`}>
@@ -864,26 +1040,8 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     );
   }
 
-  // Handle Loading State (show skeletons only on initial load, respect restored state)
-  // Now, restoredState only affects scroll, not initial render with skeletons
-  const showLoadingSkeletons = isLoading && !isPlaceholderData; // Simpler condition
-
-  if (showLoadingSkeletons) {
-    return (
-      <div ref={feedRef} className={styles.container}>
-        <div className={`${styles.feed} ${styles.loading}`}>
-          {/* Render skeletons based on estimated layout */}
-          {renderSkeletons()}
-        </div>
-      </div>
-    );
-  }
-
-  // Handle Empty State (after loading and no errors)
-  // Check images directly from useFolderImages result, not just processed/grouped ones
-  const hasNoImages = !isLoading && (!images || images.length === 0);
-
-  if (hasNoImages) {
+  const hasNoImages = !isLoadingImages && (!images || images.length === 0);
+  if (hasNoImages && !isGrouping && !isLayoutCalculating) {
     return (
       <div ref={feedRef} className={styles.container}>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.noImages}>
@@ -893,7 +1051,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     );
   }
 
-  // Main Render
+  // Main component return
   return (
     <div
       ref={feedRef}
@@ -914,6 +1072,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       />
     </div>
   );
-};
+}; // Correct closing brace for the component function
 
 export default React.memo(ImageFeed);

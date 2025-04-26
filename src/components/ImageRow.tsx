@@ -21,6 +21,7 @@ interface ImageRowProps {
   containerWidth: number;
   onImageHover: (data: ImageHoverData) => void;
   onImageLoadError: (imageId: string) => void;
+  dominantColorMap?: Map<string, string>; // Added optional prop for colors
 }
 
 // Define a smoother transition for layout animations using a soft spring
@@ -62,6 +63,7 @@ const ImageRow: React.FC<ImageRowProps> = ({
   containerWidth,
   onImageHover,
   onImageLoadError,
+  dominantColorMap, // Destructure the new prop
 }) => {
   const rowRef = useRef<HTMLDivElement>(null);
   const controls = useAnimation();
@@ -110,6 +112,9 @@ const ImageRow: React.FC<ImageRowProps> = ({
           return null;
         }
 
+        // Get the dominant color for this specific image from the map
+        const dominantColor = dominantColorMap?.get(image.id);
+
         return (
           <motion.div
             key={image.id}
@@ -139,9 +144,9 @@ const ImageRow: React.FC<ImageRowProps> = ({
               zoom={zoom}
               isCarousel={group?.isCarousel || false}
               groupImages={group?.images || []}
-              workerPool={workerPool}
               onImageHover={onImageHover}
               onImageLoadError={onImageLoadError}
+              dominantColor={dominantColor} // Pass the specific color down
             />
           </motion.div>
         );

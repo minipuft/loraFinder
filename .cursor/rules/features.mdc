@@ -1,6 +1,6 @@
 ---
 description: This document outlines the core features of the MediaFlow application.
-globs: 
+globs:
 alwaysApply: false
 ---
 # Features

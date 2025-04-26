@@ -12,6 +12,7 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
@@ -31,3 +32,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+dist/client/main.css
+dist/client/main.js
+dist/client/main.js.map
+dist/client/workers/imageProcessorWorker.BHWxsclw.js
+dist/client/workers/imageProcessorWorker.BHWxsclw.js.map
+dist/server/entry-server.js
+dist/server/entry-server.js.map
+dist/client/main.css
+dist/client/main.js
+dist/client/main.js.map
+dist/client/workers/imageProcessorWorker.BHWxsclw.js
+dist/client/workers/imageProcessorWorker.BHWxsclw.js.map
+dist/server/entry-server.js
+dist/server/entry-server.js.map

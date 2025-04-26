@@ -77,3 +77,35 @@ export enum ViewMode {
   MASONRY = 'masonry',
   CAROUSEL = 'carousel',
 }
+
+// Interface for the data stored in IndexedDB for cached images
+export interface ProcessedImageCacheEntry {
+  id: string;
+  lowResUrl?: string; // Blob URL for low-res
+  lowResWidth?: number;
+  lowResHeight?: number;
+  highResUrl?: string; // Blob URL for high-res
+  width?: number; // Original requested width
+  height?: number; // Original requested height
+  timestamp?: number; // When it was cached
+}
+
+// Interface for the Comlink-exposed worker API
+export interface ImageProcessorWorkerAPI {
+  processImage(data: {
+    id: string;
+    // Accept ImageBitmap directly
+    imageBitmap: ImageBitmap;
+    width: number;
+    height: number;
+    signal?: AbortSignal;
+  }): Promise<{ lowResUrl?: string; highResUrl?: string }>; // Return URLs
+
+  processBatch(data: {
+    // Batch expects bitmaps now
+    images: Array<{ id: string; imageBitmap: ImageBitmap; width: number; height: number }>;
+    signal?: AbortSignal;
+    // Add callback for progress? Comlink supports callbacks
+    // onProgress?: (processed: { id: string; lowResUrl?: string; highResUrl?: string }) => void;
+  }): Promise<Array<{ id: string; lowResUrl?: string; highResUrl?: string }>>; // Return array of results
+}
