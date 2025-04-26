@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import MotionPreset from '../animations/MotionPreset';
 import { ProcessedImageUpdate, useImageProcessing } from '../contexts/ImageProcessingContext';
 import styles from '../styles/ImageItem.module.scss';
 import { ImageInfo } from '../types/index.js';
@@ -144,7 +145,6 @@ const ImageItem: React.FC<ImageItemProps> = ({
   dominantColor,
 }) => {
   const imageRef = useRef<HTMLImageElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [isHighResLoaded, setIsHighResLoaded] = useState(false);
   const [processedUrls, setProcessedUrls] = useState<{ low?: string; high?: string }>({});
   const [hasError, setHasError] = useState(false);
@@ -173,9 +173,9 @@ const ImageItem: React.FC<ImageItemProps> = ({
     }
   }, [targetWidth, targetHeight, onResize]);
 
-  const handleMouseEnter = useCallback(() => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
+  const handleMouseEnter = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const rect = event.currentTarget.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
       const normalizedX = centerX / window.innerWidth;
@@ -186,8 +186,9 @@ const ImageItem: React.FC<ImageItemProps> = ({
         color: dominantColor || null,
         imageId: image.id,
       });
-    }
-  }, [onImageHover, image.id, dominantColor]);
+    },
+    [onImageHover, image.id, dominantColor]
+  );
 
   const handleMouseLeave = useCallback(() => {
     onImageHover({
@@ -244,10 +245,9 @@ const ImageItem: React.FC<ImageItemProps> = ({
   const handleImageLoad = useCallback(() => {
     if (imageUrl === processedUrls.high || (!processedUrls.high && imageUrl === image.src)) {
       setIsHighResLoaded(true);
-      console.log(`[ImageItem ${image.id}] High-res considered loaded:`, imageUrl);
     }
     setHasError(false);
-  }, [imageUrl, processedUrls.high, image.src]);
+  }, [imageUrl, processedUrls.high, image.src, image.id]);
 
   const handleImageError = useCallback(() => {
     console.error(`ImageItem: Failed to load image ${image.id}`, imageUrl);
@@ -261,8 +261,9 @@ const ImageItem: React.FC<ImageItemProps> = ({
   );
 
   return (
-    <motion.div
-      ref={containerRef}
+    <MotionPreset
+      as="div"
+      preset="hoverPop"
       className={`${styles.imageItem} group`}
       layout
       onMouseEnter={handleMouseEnter}
@@ -276,8 +277,9 @@ const ImageItem: React.FC<ImageItemProps> = ({
         cursor: 'pointer',
         aspectRatio: aspectRatio,
       }}
+      initial={false}
+      animate={false}
     >
-      {/* 1. Placeholder Background using AnimatePresence & motion.div */}
       <AnimatePresence>
         {!isHighResLoaded && !hasError && (
           <motion.div
@@ -291,13 +293,12 @@ const ImageItem: React.FC<ImageItemProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 2. Image Rendering (using ResponsiveImage with controlled animation) */}
       {!hasError && imageUrl && (
         <ResponsiveImage
           ref={imageRef}
           key={imageUrl}
           src={imageUrl}
-          alt={image.alt}
+          alt={image.alt ?? ''}
           width={targetWidth}
           isProcessed={isProcessed}
           onLoad={handleImageLoad}
@@ -308,10 +309,8 @@ const ImageItem: React.FC<ImageItemProps> = ({
         />
       )}
 
-      {/* Error Indicator (Optional) - Display if error occurred */}
       {hasError && <div className={styles.errorIndicator}>Error</div>}
 
-      {/* Overlay Content - Keep as is */}
       {!hasError && (
         <motion.div
           className={styles.overlay}
@@ -319,15 +318,14 @@ const ImageItem: React.FC<ImageItemProps> = ({
           whileHover={{ opacity: 1 }}
           transition={{ duration: 0.2 }}
         >
-          <p className={styles.title}>{truncateImageTitle(image.alt)}</p>
+          <p className={styles.title}>{truncatedTitle}</p>
         </motion.div>
       )}
 
-      {/* Group Indicator - Keep as is */}
       {!hasError && groupCount && groupCount > 1 && (
         <div className={styles.groupIndicator}>{groupCount}</div>
       )}
-    </motion.div>
+    </MotionPreset>
   );
 };
 

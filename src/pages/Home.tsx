@@ -1,9 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout.js';
 import MainContent from '../components/MainContent.js';
-// import { getFolders, getImages } from '../lib/api.js'; // getFolders no longer needed here
+import { useFolderImages } from '../hooks/query/useFolderImages';
+import { useAnimationPipeline } from '../hooks/useAnimationPipeline';
 import { ViewMode } from '../types/index.js';
-// Import the settings utilities
 import { getHomeDirectory } from '../utils/settings.js';
 
 /**
@@ -15,50 +15,57 @@ import { getHomeDirectory } from '../utils/settings.js';
  */
 const Home: React.FC = () => {
   // State declarations for managing application data and UI
-  // const [folders, setFolders] = useState<FolderInfo[]>([]); // Removed: Managed by useFolders in Sidebar
   const [selectedFolder, setSelectedFolder] = useState<string>(() => {
     return getHomeDirectory() || '';
   });
-  // const [images, setImages] = useState<ImageInfo[]>([]); // Removed
+  const { data: images, isLoading: isLoadingImages } = useFolderImages(selectedFolder);
   const [zoom, setZoom] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  // const [currentDirectory, setCurrentDirectory] = useState<string>(''); // Removed: Managed by useCurrentDirectory
-  // const [isLoading, setIsLoading] = useState<boolean>(false); // Removed
-  // const [error, setError] = useState<string | null>(null); // Removed
   const [isGrouped, setIsGrouped] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
 
-  // Create ref for the main scrollable element
+  // Refs
   const mainScrollRef = useRef<HTMLElement>(null);
+  const layoutWrapperRef = useRef<HTMLDivElement>(null); // Ref for the outer wrapper div
+  const sidebarRef = useRef<HTMLDivElement>(null); // Ref for Sidebar
+  const navbarRef = useRef<HTMLDivElement>(null); // Ref for Navbar
+  const contentAreaRef = useRef<HTMLDivElement>(null); // Ref for MainContent wrapper area
 
-  /**
-   * Effect hook to fetch the list of folders when the component mounts.
-   * Sets the first folder as selected if available.
-   * Removed: This is now handled by Sidebar component via useFolders hook.
-   */
-  // useEffect(() => {
-  //   const fetchFolders = async () => {
-  //     try {
-  //       const folderList = await getFolders();
-  //       setFolders(folderList);
-  //       if (folderList.length > 0 && !selectedFolder) { // Only set initial folder if none selected
-  //         setSelectedFolder(folderList[0].name);
-  //       }
-  //     } catch (error) {
-  //       console.error('Error fetching folders:', error);
-  //       // setError('Failed to fetch folders'); // setError removed
-  //     }
-  //   };
+  // --- Animation Setup ---
+  const homeEnterPipeline = useAnimationPipeline({ paused: true });
 
-  //   fetchFolders();
-  // }, [selectedFolder]);
-
-  /**
-   * Effect hook to fetch images when the selected folder changes.
-   * Updates loading state and handles errors.
-   * Removed: This is now handled by ImageFeed component via useFolderImages hook.
-   */
-  // ... (Removed image fetching useEffect)
+  // Configure the entrance animation steps once
+  useEffect(() => {
+    if (
+      layoutWrapperRef.current &&
+      sidebarRef.current &&
+      navbarRef.current &&
+      contentAreaRef.current
+    ) {
+      homeEnterPipeline
+        .addStep({
+          target: layoutWrapperRef.current,
+          preset: 'fadeIn',
+          options: { delay: 0.1, duration: 0.4 },
+        })
+        .addStep({
+          target: sidebarRef.current,
+          preset: 'fadeIn',
+          options: { delay: 0.2, duration: 0.4 },
+        })
+        .addStep({
+          target: navbarRef.current,
+          preset: 'fadeIn',
+          options: { delay: 0.2, duration: 0.4 },
+        })
+        .addStep({
+          target: contentAreaRef.current,
+          preset: 'fadeIn',
+          options: { delay: 0.3, duration: 0.5 },
+        });
+      // Pipeline remains paused until triggered
+    }
+  }, [homeEnterPipeline]);
 
   /**
    * Handler for folder selection change.
@@ -67,8 +74,16 @@ const Home: React.FC = () => {
    */
   const handleFolderChange = (folder: string) => {
     setSelectedFolder(folder);
-    // No need to fetch images here manually anymore
   };
+
+  // Restart the entrance animation whenever images finish loading for a new folder
+  const prevLoading = useRef<boolean>(true);
+  useEffect(() => {
+    if (prevLoading.current && !isLoadingImages) {
+      homeEnterPipeline.restart();
+    }
+    prevLoading.current = isLoadingImages;
+  }, [isLoadingImages, homeEnterPipeline]);
 
   /**
    * Handler for zoom level change.
@@ -114,34 +129,36 @@ const Home: React.FC = () => {
   // Render the main layout with all necessary props
   // Note: 'folders' & 'currentDirectory' props are removed from Layout
   return (
-    <Layout
-      // folders={folders} // Removed
-      selectedFolder={selectedFolder}
-      onFolderChange={handleFolderChange}
-      // currentDirectory={selectedFolder} // Removed
-      onSearch={handleSearch}
-      zoom={zoom}
-      onZoomChange={handleZoomChange}
-      isGrouped={isGrouped}
-      onGroupToggle={handleGroupToggle}
-      viewMode={viewMode}
-      onViewModeChange={handleViewModeChange}
-      mainRef={mainScrollRef}
-    >
-      {/* Pass relevant state down to MainContent */}
-      {/* MainContent no longer needs images, isLoading, error */}
-      <MainContent
-        // images={images} // Removed
-        zoom={zoom}
-        searchQuery={searchQuery}
-        // isLoading={isLoading} // Removed
-        // error={error} // Removed
+    // Remove initial style - let it render normally
+    <div ref={layoutWrapperRef}>
+      <Layout
+        ref={layoutWrapperRef} // Pass ref even if not animating for now
         selectedFolder={selectedFolder}
+        onFolderChange={handleFolderChange}
+        onSearch={handleSearch}
+        zoom={zoom}
+        onZoomChange={handleZoomChange}
         isGrouped={isGrouped}
+        onGroupToggle={handleGroupToggle}
         viewMode={viewMode}
-        scrollContainerRef={mainScrollRef}
-      />
-    </Layout>
+        onViewModeChange={handleViewModeChange}
+        mainRef={mainScrollRef} // For scrolling
+        // Pass down refs for internal elements
+        sidebarRef={sidebarRef}
+        navbarRef={navbarRef}
+        contentAreaRef={contentAreaRef}
+      >
+        {/* MainContent is rendered inside Layout as children */}
+        <MainContent
+          zoom={zoom}
+          searchQuery={searchQuery}
+          selectedFolder={selectedFolder}
+          isGrouped={isGrouped}
+          viewMode={viewMode}
+          scrollContainerRef={mainScrollRef}
+        />
+      </Layout>
+    </div>
   );
 };
 
