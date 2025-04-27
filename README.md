@@ -123,22 +123,45 @@ pipeline
 
 ```mermaid
 graph TD
-    UI[React Components] -->|triggers| AP[AnimationPipeline]
-    AP -->|adds Tween steps| GSAP[GSAP Timeline]
-    GSAP -->|applies| DOM[DOM Elements]
-    UI -->|layout transitions| FM[Framer Motion]
-    FM -->|transitions| DOM
-
-    subgraph GroupingAnimator
-      GA[GroupingAnimator] -->|group()/ungroup()| AP
+    subgraph "React UI (ImageFeed, ImageRow)"
+        direction LR
+        UI_IF[ImageFeed Component]
+        UI_IR[ImageRow Component]
     end
 
-    subgraph AnimationSystem
-      AS[AnimationSystem] -->|hover/morph| GSAP
-      AS -->|scroll| STM[ScrollTriggerManager] -->|scroll triggers| GSAP
+    subgraph "GSAP-Based Orchestration"
+        direction TB
+        GA[GroupingAnimator] --> |uses| AP[AnimationPipeline]
+        AP --> |builds| TL[GSAP Timeline]
+        TL --> |animates| DOM[DOM Elements]
     end
+
+    subgraph "GSAP Utilities & Scroll"
+        direction TB
+        AU[AnimationUtils] --> |delegates scroll| STM[ScrollTriggerManager]
+        STM --> |creates| ST[GSAP ScrollTrigger]
+        AU --> |creates simple tweens| GT[GSAP Tweens]
+        ST --> |triggers| GT
+        GT --> |animates| DOM
+    end
+
+    subgraph "Framer Motion"
+        direction TB
+        FM_M[motion Component] --> |layout/variants| DOM
+        FM_AP[AnimatePresence] --> |manages| FM_M[motion Component]
+    end
+
+    UI_IF --> |controls state for| UI_IR
+    UI_IF --> |instantiates/uses| GA
+    UI_IF -.-> |instantiates (unused)| AU
+    UI_IR --> |uses| FM_M
+
+    %% Explicitly show GSAP is the core engine
+    TL -.-> |engine| GSAPLib[(GSAP Core)]
+    GT -.-> |engine| GSAPLib
+    ST -.-> |engine| GSAPLib
 ```
 
-## 📂 Project Structure
+## �� Project Structure
 
 - `src/`

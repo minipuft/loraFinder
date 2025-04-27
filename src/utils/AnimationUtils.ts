@@ -5,9 +5,9 @@ import ScrollTriggerManager from './ScrollTriggerManager';
 
 gsap.registerPlugin(ScrollTrigger, CustomEase);
 
-// Simplified animation system without ripples and energy mechanics
-export class AnimationSystem {
-  private static instance: AnimationSystem;
+// Simplified animation utility class
+export class AnimationUtils {
+  private static instance: AnimationUtils;
   private scrollTriggerManager: ScrollTriggerManager;
 
   private constructor() {
@@ -23,11 +23,11 @@ export class AnimationSystem {
     CustomEase.create('gentleIn', 'M0,0 C0.39,0 0.575,0.565 0.669,0.782 0.762,1 0.846,1 1,1');
   }
 
-  static getInstance(): AnimationSystem {
-    if (!AnimationSystem.instance) {
-      AnimationSystem.instance = new AnimationSystem();
+  static getInstance(): AnimationUtils {
+    if (!AnimationUtils.instance) {
+      AnimationUtils.instance = new AnimationUtils();
     }
-    return AnimationSystem.instance;
+    return AnimationUtils.instance;
   }
 
   getAnimationProperties(itemId: string): gsap.TweenVars {
@@ -65,4 +65,4 @@ export class AnimationSystem {
   }
 }
 
-export default AnimationSystem;
+export default AnimationUtils;

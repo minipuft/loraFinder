@@ -29,7 +29,7 @@ import useWindowSize from '../hooks/useWindowSize.js';
 import { loadScrollState, saveScrollState, ScrollState } from '../lib/cache/feedStateCache';
 import styles from '../styles/ImageFeed.module.scss';
 import { ImageInfo, ViewMode } from '../types/index.js';
-import AnimationSystem from '../utils/AnimationSystem';
+import AnimationUtils from '../utils/AnimationUtils';
 import {
   calculateGapSize,
   calculateLayout,
@@ -166,7 +166,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const [columns, setColumns] = useState(4);
   const [lightboxIndex, setLightboxIndex] = useState<number>(-1);
   const [lightboxImages, setLightboxImages] = useState<ImageInfo[]>([]);
-  const animationSystem = useMemo(() => AnimationSystem.getInstance(), []);
+  const animationUtils = useMemo(() => AnimationUtils.getInstance(), []);
   const { setDominantColors, setHoverState } = useContext(ColorContext);
   const [dominantColorMap, setDominantColorMap] = useState<Map<string, string>>(new Map());
   const requestedColorIds = useRef<Set<string>>(new Set());

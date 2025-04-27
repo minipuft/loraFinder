@@ -99,7 +99,7 @@ const ImageRow: React.FC<ImageRowProps> = ({
         alignItems: 'stretch',
       }}
     >
-      <AnimatePresence initial={false} mode="wait" onExitComplete={onExitComplete}>
+      <AnimatePresence initial={false} mode="sync" onExitComplete={onExitComplete}>
         {images.map((image, index) => {
           const group = groupedImages.find(g => g.images.some(img => img.id === image.id));
           const width = imageWidths[index];
