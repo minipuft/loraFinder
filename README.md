@@ -1,141 +1,151 @@
 # MediaFlow
 
-MediaFlow is a web application for managing and viewing image files, with a focus on displaying preview images for LORA (Low-Rank Adaptation) FLUX and related models. Built with Vite, Express, and React with Server-Side Rendering (SSR), it provides a robust platform for image management and viewing.
+<div align="center">
+  <img src="docs/images/logo-placeholder.png" alt="MediaFlow Logo" width="200"/>
 
-## Features
+  <p><strong>A flexible, high-performance gallery for browsing and managing images, with special support for LoRA model previews</strong></p>
 
-- 🖼️ Advanced image management and viewing capabilities
-- 📁 Hierarchical folder navigation and management
-- 🔍 Full-text search across all images and folders
-- 🎨 Responsive masonry grid layout
-- 🔄 Real-time image processing with Sharp
-- 📱 Mobile-friendly responsive design
-- ⚡ Fast image loading with lazy loading, caching, and SSR
-- 🎯 Cursor-based pagination for efficient data loading (Verify specific implementation if needed)
-- 🔒 Secure file handling and validation
+  <p>
+    <img src="https://img.shields.io/badge/React-18-blue" alt="React 18"/>
+    <img src="https://img.shields.io/badge/TypeScript-5.x-blue" alt="TypeScript"/>
+    <img src="https://img.shields.io/badge/Vite-5.x-purple" alt="Vite"/>
+    <img src="https://img.shields.io/badge/License-MIT-green" alt="License"/>
+  </p>
+</div>
 
-## Tech Stack
+## ✨ Overview
+
+MediaFlow is a versatile web application designed as a general-purpose gallery for browsing, organizing, and previewing images of any kind. It also offers specialized handling for LoRA (Low-Rank Adaptation) AI model previews, making it ideal for AI artists working with custom model files.
+
+<div align="center">
+  <img src="docs/images/ui-screenshot-placeholder.png" alt="MediaFlow UI" width="90%"/>
+</div>
+
+## 🚀 Key Features
+
+- **General Image Gallery**: Manage and display collections of photos, artwork, screenshots, and more.
+- **LoRA Preview Support**: Cleans and processes LoRA preview images (e.g., `.example.x` files) for accurate display.
+- **Multiple View Modes**: Grid, Banner, Masonry, Carousel, and Grouped layouts.
+- **Advanced Animations**: Smooth transitions and interactions powered by GSAP and Framer Motion.
+- **High Performance**: SSR-enabled with Vite, lazy loading, and efficient caching strategies.
+- **Client-Side Cache**: IndexedDB for quick repeat visits.
+- **Search & Navigation**: Full-text search, hierarchical folder navigation, and cursor-based pagination.
+- **Extensible Architecture**: Modular React components, custom hooks, and Web Worker support.
+
+<div align="center">
+  <img src="docs/images/animation-showcase-placeholder.gif" alt="Animation Showcase" width="90%"/>
+</div>
+
+## 🛠️ Tech Stack
 
 ### Frontend
 
-- React 18 with TypeScript
-- Vite for development, building, and SSR
-- SCSS Modules + Tailwind CSS for styling
-- Framer Motion for animations
-- React Query for data fetching
+- React 18 + TypeScript
+- Vite for development & SSR
+- SCSS Modules + Tailwind CSS
+- GSAP + Framer Motion
+- React Query
+- IndexedDB Cache
 
 ### Backend
 
-- Express.js server integrated with Vite for SSR
+- Express.js (Vite SSR middleware)
 - Sharp for image processing
-- Node Cache for server-side caching
-- TypeScript for type safety
-- Zod for validation
+- LRU / Node Cache for server-side caching
+- Zod for request validation
+- TypeScript
 
-## Prerequisites
+## 🏁 Getting Started
 
-- Node.js >= 18.0.0
-- npm (>= 9.0.0 recommended)
-- Git
+### Prerequisites
 
-## Getting Started
+- Node.js >= 18
+- npm >= 9
+- A directory containing your images or LoRA model files
 
-1. **Clone the repository**
+### Installation
 
-   ```bash
-   # Replace 'yourusername/mediaflow.git' with the actual repository URL if different
-   git clone https://github.com/yourusername/mediaflow.git
-   cd mediaflow
-   ```
+```bash
+git clone https://github.com/yourusername/mediaflow.git
+cd mediaflow
+npm install
+```
 
-2. **Install dependencies**
+### Configuration
 
-   ```bash
-   npm install
-   ```
+Create a `.env` file in the root:
 
-3. **Set up environment variables**
-   Create a `.env` file in the root directory:
+```env
+VITE_PORT=3001
+VITE_HOST=localhost
+MAIN_DIRECTORY=/path/to/your/image/directory
+```
 
-   ```env
-   # Port for the Express server (Vite client assets served through this in dev)
-   VITE_PORT=3001
-   # Host for the server
-   VITE_HOST=localhost
-   # Main directory containing image files
-   MAIN_DIRECTORY=/path/to/your/image/directory
-   ```
+### Running Locally
 
-4. **Development**
+```bash
+npm run dev
+# Open http://localhost:3001
+```
 
-   ```bash
-   npm run dev
-   ```
+### Production
 
-   This command starts the Express server (using `tsx` for hot-reloading) which serves the Vite-processed client application with SSR enabled. Access the application at `http://localhost:3001` (or your configured `VITE_HOST`/`VITE_PORT`).
+```bash
+npm run build
+npm start
+```
 
-5. **Production Build**
-   ```bash
-   # Build client and server bundles
-   npm run build
-   # Start the production server
-   npm start
-   ```
+## 📖 Usage
 
-## Project Structure
+1. Browse your image collection via the sidebar.
+2. Switch between different view layouts.
+3. Search and filter by filename or metadata.
+4. Click an image for full-size preview and details.
+5. (If using LoRA models) LoRA previews will be auto-cleaned and displayed correctly.
 
-The project uses a monorepo-like structure managed within a single `package.json`, combining a Vite-based React frontend with an Express backend, leveraging Vite for SSR.
+## 🌟 Animation System
 
-- `src/`: Contains the frontend application code.
-  - `components/`: Reusable React components.
-  - `pages/`: Components representing application pages/views.
-  - `hooks/`: Custom React hooks.
-  - `contexts/`: React context providers.
-  - `utils/`: Utility functions.
-  - `types/`: Shared TypeScript type definitions.
-  - `styles/`: Global styles, SCSS modules, Tailwind setup.
-  - `lib/`: Core libraries or modules (e.g., caching).
-  - `api/`: Client-side API fetching logic (e.g., functions using React Query).
-  - `workers/`: Web worker implementations.
-  - `App.tsx`: Main application component.
-  - `main.tsx`: Client-side entry point.
-  - `entry-server.tsx`: Server-side entry point for SSR.
-- `server.ts`: Express server setup, including API routing and Vite SSR middleware.
-- `public/`: Static assets served by Express.
-- `dist/`: Output directory for production builds (client and server).
-- `vite.config.client.ts`: Vite configuration for the client build.
-- `vite.config.server.ts`: Vite configuration for the server build.
-- `tsconfig.json`: TypeScript configuration.
-- `tailwind.config.js`: Tailwind CSS configuration.
-  // ... other configuration files like .eslintrc, .prettierrc, commitlint.config.js etc.
+MediaFlow uses a unified animation pipeline for sophisticated sequences:
 
-## Configuration Files
+```ts
+import { AnimationPipeline } from './src/animations/AnimationPipeline';
 
-- `vite.config.client.ts`: Vite configuration specific to the client build.
-- `vite.config.server.ts`: Vite configuration specific to the server/SSR build.
-- `tailwind.config.js`: Tailwind CSS theme and plugin configuration.
-- `tsconfig.json`: TypeScript compiler options and path aliases.
-- `.eslintrc.js` / `.eslintrc.cjs`: ESLint rules and configuration (adjust filename if needed).
-- `prettier.config.js` / `.prettierrc.json`: Prettier code formatting rules (adjust filename if needed).
-- `commitlint.config.js`: Conventional commit message rules.
-- `.env`: Environment variables (not committed).
+const pipeline = new AnimationPipeline();
+pipeline
+  .addStep({ target: element, preset: 'fadeIn', vars: { duration: 0.5 } })
+  .addStep({ target: otherEl, preset: 'slideUp', position: '+=0.1' })
+  .play();
+```
 
-## API Routes
+<div align="center">
+  <img src="docs/images/animation-diagram-placeholder.png" alt="Animation System" width="70%"/>
+</div>
 
-The Express server exposes the following API endpoints under the `/api` prefix:
+## 📂 Project Structure
 
-- `/api/folders`: Endpoints related to folder operations.
-- `/api/image`: Endpoints for fetching/managing single image data.
-- `/api/images`: Endpoints for fetching lists of images.
-- `/api/image/[...params]`: Dynamic routes for specific image parameters/actions.
-- `/api/search`: Endpoint for searching images.
-- `/api/upload`: Endpoint for file uploads.
-- `/api/getCurrentDirectory`: Endpoint to get the configured main directory.
+- `src/`
+  - `animations/` – Animation pipeline & presets
+  - `components/` – Reusable React components
+  - `contexts/` – React Context providers
+  - `hooks/` – Custom React hooks
+  - `lib/` – Utility modules (caching, API clients)
+  - `pages/` – Application views
+  - `server/` – Server-side code & API routes
+  - `styles/` – SCSS modules & Tailwind CSS
+  - `workers/` – Web Worker scripts
+- `public/` – Static assets
+- `docs/` – Documentation & placeholder images
 
-## Contributing
+## 🤝 Contributing
 
-[Add contribution guidelines here]
+Contributions welcome! Please open issues or pull requests to improve MediaFlow.
 
-## License
+## 📄 License
 
-[Add license information here]
+MIT © YourName
+
+## 🙏 Acknowledgements
+
+- [React Masonry CSS](https://github.com/paulcollett/react-masonry-css)
+- [GSAP](https://greensock.com/gsap/)
+- [Stable Diffusion](https://stability.ai/)

@@ -1,4 +1,4 @@
-const HOME_DIRECTORY_KEY = 'loraFinderHomeDirectory';
+const HOME_DIRECTORY_KEY = 'mediaFlowHomeDirectory';
 
 /**
  * Retrieves the stored home directory path from localStorage.

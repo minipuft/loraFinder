@@ -67,7 +67,7 @@ const Sidebar = forwardRef<HTMLDivElement, SidebarProps>(
       <motion.div ref={ref} className={styles.sidebar}>
         <div className={`${styles.sidebarInner} flex flex-col h-full`}>
           {/* Logo section */}
-          <div className={styles.logo}>Lora Finder</div>
+          <div className={styles.logo}>MediaFlow</div>
           {/* Folder list */}
           <ul className={`${styles.folderList} flex-grow overflow-y-auto`}>
             {/* Map through folders (from hook) and create buttons for each */}
