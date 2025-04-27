@@ -118,46 +118,42 @@ pipeline
 ```
 
 <div align="center">
-  <img src="docs/images/animation-diagram-placeholder.png" alt="Animation System" width="70%"/>
+  <img src="docs/images/animation-diagram.png" alt="Animation System Diagram" width="70%"/>
 </div>
-```mermaid
-%%{init: { 'theme': 'neutral' }}%%
-graph TD
-  subgraph ReactUI["React UI (ImageFeed, ImageRow)"]
-    UI_IF[ImageFeed Component]
-    UI_IR[ImageRow Component]
-  end
 
-subgraph GSAP_Orchestration["GSAP-Based Orchestration"]
-GA[GroupingAnimator] --> AP[AnimationPipeline]
-AP --> TL[GSAP Timeline]
-TL --> DOM[DOM Elements]
-end
-
-subgraph GSAP_Utilities["GSAP Utilities & Scroll"]
-AU[AnimationUtils] --> STM[ScrollTriggerManager]
-STM --> ST[GSAP ScrollTrigger]
-AU --> GT[GSAP Tweens]
-ST --> GT
-GT --> DOM
-end
-
-subgraph FramerMotion["Framer Motion"]
-FM_M[motion Component] --> FM_AP[AnimatePresence]
-FM_AP --> FM_M
-end
-
-UI_IF --> UI_IR
-UI_IF --> GA
-UI_IF -.-> AU
-UI_IR --> FM_M
-TL -.-> GSAPLib[(GSAP Core)]
-GT -.-> GSAPLib
-ST -.-> GSAPLib
-
-```
-
-## 📦 Project Structure
+## 📂 Project Structure
 
 - `src/`
-```
+  - `animations/` – Animation pipeline & presets
+  - `components/` – Reusable React components
+  - `contexts/` – React Context providers
+  - `hooks/` – Custom React hooks
+  - `lib/` – Utility modules (caching, API clients)
+  - `pages/` – Application views
+  - `server/` – Server-side code & API routes
+  - `styles/` – SCSS modules & Tailwind CSS
+  - `workers/` – Web Worker scripts
+- `public/` – Static assets
+- `docs/` – Documentation & placeholder images
+
+## 🤝 Contributing
+
+Contributions welcome! Please open issues or pull requests to improve MediaFlow.
+
+## 📄 License
+
+MIT © minipuft
+
+## 🙏 Acknowledgements
+
+- [GSAP](https://greensock.com/gsap/)
+
+## 🔜 Roadmap / TODO for LoRaFinder
+
+- Integrate Zod schemas into Express API endpoints and client-side form validation for safety and type correctness.
+- Scrolling animations with our new `AnimationPipeline` (hybrid GSAP timeline + Framer Motion `motion.div` transitions); revisit the docs for guidance.
+- Smooth zooming animations for image previews and group transitions.
+- Pinch-to-zoom support and gesture handling on touch devices.
+- Scroll-triggered animations leveraging `ScrollTriggerManager`.
+- Write unit and integration tests for Zod validations and animation pipelines.
+- Update documentation and examples for animation usage in the `docs/` directory.
