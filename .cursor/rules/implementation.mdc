@@ -60,3 +60,14 @@ alwaysApply: false
 - **SSR Considerations:** Ensure components are SSR-compatible. Avoid direct DOM manipulation outside of `useEffect` hooks. Be mindful of code that relies solely on browser APIs during server rendering.
 - **Dependencies:** Keep dependencies up-to-date. Use `npm install` for adding dependencies. Validate dependencies using `npm run validate:deps`.
 - **Security:** Sanitize user inputs, validate data using libraries like Zod, be mindful of file system access permissions, and avoid exposing sensitive information.
+
+## TODO
+
+### Zod Integration
+- Integrate Zod schemas into Express API endpoints and client-side form validation for safety and type correctness.
+
+### Animation Enhancements
+- Scrolling animations with our new `AnimationPipeline` (hybrid GSAP timeline + Framer Motion `motion.div` transitions); revisit the docs for guidance.
+- Smooth zooming animations for image previews and group transitions.
+- Pinch-to-zoom support on touch devices.
+- Scroll-triggered animations via `ScrollTriggerManager' and 'useScrollAnimations'.

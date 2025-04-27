@@ -51,7 +51,7 @@ MediaFlow is a versatile web application designed as a general-purpose gallery f
 
 - Express.js (Vite SSR middleware)
 - Sharp for image processing
-- LRU / Node Cache for server-side caching
+- LRU for server-side caching
 - Zod for request validation
 - TypeScript
 
@@ -121,31 +121,24 @@ pipeline
   <img src="docs/images/animation-diagram-placeholder.png" alt="Animation System" width="70%"/>
 </div>
 
+```mermaid
+graph TD
+    UI[React Components] -->|triggers| AP[AnimationPipeline]
+    AP -->|adds Tween steps| GSAP[GSAP Timeline]
+    GSAP -->|applies| DOM[DOM Elements]
+    UI -->|layout transitions| FM[Framer Motion]
+    FM -->|transitions| DOM
+
+    subgraph GroupingAnimator
+      GA[GroupingAnimator] -->|group()/ungroup()| AP
+    end
+
+    subgraph AnimationSystem
+      AS[AnimationSystem] -->|hover/morph| GSAP
+      AS -->|scroll| STM[ScrollTriggerManager] -->|scroll triggers| GSAP
+    end
+```
+
 ## 📂 Project Structure
 
 - `src/`
-  - `animations/` – Animation pipeline & presets
-  - `components/` – Reusable React components
-  - `contexts/` – React Context providers
-  - `hooks/` – Custom React hooks
-  - `lib/` – Utility modules (caching, API clients)
-  - `pages/` – Application views
-  - `server/` – Server-side code & API routes
-  - `styles/` – SCSS modules & Tailwind CSS
-  - `workers/` – Web Worker scripts
-- `public/` – Static assets
-- `docs/` – Documentation & placeholder images
-
-## 🤝 Contributing
-
-Contributions welcome! Please open issues or pull requests to improve MediaFlow.
-
-## 📄 License
-
-MIT © YourName
-
-## 🙏 Acknowledgements
-
-- [React Masonry CSS](https://github.com/paulcollett/react-masonry-css)
-- [GSAP](https://greensock.com/gsap/)
-- [Stable Diffusion](https://stability.ai/)
