@@ -18,7 +18,7 @@
 MediaFlow is a versatile web application designed as a general-purpose gallery for browsing, organizing, and previewing images of any kind. It also offers specialized handling for LoRA (Low-Rank Adaptation) AI model previews, making it ideal for AI artists working with custom model files.
 
 <div align="center">
-  <img src="docs/images/ui-screenshot-placeholder.png" alt="MediaFlow UI" width="90%"/>
+  <img src="docs/images/ui-Screenshot.png" alt="MediaFlow UI" width="90%"/>
 </div>
 
 ## 🚀 Key Features
@@ -120,48 +120,44 @@ pipeline
 <div align="center">
   <img src="docs/images/animation-diagram-placeholder.png" alt="Animation System" width="70%"/>
 </div>
-
 ```mermaid
+%%{init: { 'theme': 'neutral' }}%%
 graph TD
-    subgraph "React UI (ImageFeed, ImageRow)"
-        direction LR
-        UI_IF[ImageFeed Component]
-        UI_IR[ImageRow Component]
-    end
+  subgraph ReactUI["React UI (ImageFeed, ImageRow)"]
+    UI_IF[ImageFeed Component]
+    UI_IR[ImageRow Component]
+  end
 
-    subgraph "GSAP-Based Orchestration"
-        direction TB
-        GA[GroupingAnimator] --> |uses| AP[AnimationPipeline]
-        AP --> |builds| TL[GSAP Timeline]
-        TL --> |animates| DOM[DOM Elements]
-    end
+subgraph GSAP_Orchestration["GSAP-Based Orchestration"]
+GA[GroupingAnimator] --> AP[AnimationPipeline]
+AP --> TL[GSAP Timeline]
+TL --> DOM[DOM Elements]
+end
 
-    subgraph "GSAP Utilities & Scroll"
-        direction TB
-        AU[AnimationUtils] --> |delegates scroll| STM[ScrollTriggerManager]
-        STM --> |creates| ST[GSAP ScrollTrigger]
-        AU --> |creates simple tweens| GT[GSAP Tweens]
-        ST --> |triggers| GT
-        GT --> |animates| DOM
-    end
+subgraph GSAP_Utilities["GSAP Utilities & Scroll"]
+AU[AnimationUtils] --> STM[ScrollTriggerManager]
+STM --> ST[GSAP ScrollTrigger]
+AU --> GT[GSAP Tweens]
+ST --> GT
+GT --> DOM
+end
 
-    subgraph "Framer Motion"
-        direction TB
-        FM_M[motion Component] --> |layout/variants| DOM
-        FM_AP[AnimatePresence] --> |manages| FM_M[motion Component]
-    end
+subgraph FramerMotion["Framer Motion"]
+FM_M[motion Component] --> FM_AP[AnimatePresence]
+FM_AP --> FM_M
+end
 
-    UI_IF --> |controls state for| UI_IR
-    UI_IF --> |instantiates/uses| GA
-    UI_IF -.-> |instantiates (unused)| AU
-    UI_IR --> |uses| FM_M
+UI_IF --> UI_IR
+UI_IF --> GA
+UI_IF -.-> AU
+UI_IR --> FM_M
+TL -.-> GSAPLib[(GSAP Core)]
+GT -.-> GSAPLib
+ST -.-> GSAPLib
 
-    %% Explicitly show GSAP is the core engine
-    TL -.-> |engine| GSAPLib[(GSAP Core)]
-    GT -.-> |engine| GSAPLib
-    ST -.-> |engine| GSAPLib
 ```
 
-## �� Project Structure
+## 📦 Project Structure
 
 - `src/`
+```
