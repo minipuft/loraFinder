@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="1024"
+    height="1024"
+    viewBox="0 0 1024 1024"
+    preserveAspectRatio="xMidYMid meet"
+>
+  <defs>
+    <!-- Cyan→Magenta gradient -->
+    <linearGradient id="mfGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00E5FF"/>
+      <stop offset="100%" stop-color="#E000FF"/>
+    </linearGradient>
+
+    <!-- Soft glow effect -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="20" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- MF symbol -->
+  <path
+    d="
+      M 260,760
+      C 260,500 260,260 512,260
+      C 760,260 700,520 700,760
+      L 580,760
+      C 580,540 580,380 512,380
+      C 430,380 430,760 260,760
+      Z
+    "
+    fill="url(#mfGradient)"
+    filter="url(#glow)"
+  />
+
+  <!-- Wordmark -->
+  <text
+    x="512"
+    y="900"
+    text-anchor="middle"
+    font-family="Helvetica, Arial, sans-serif"
+    font-weight="700"
+    font-size="100"
+    fill="#FFFFFF"
+  >MEDIAFLOW</text>
+</svg>

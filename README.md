@@ -1,7 +1,7 @@
 # MediaFlow
 
 <div align="center">
-  <img src="docs/images/logo-placeholder.png" alt="MediaFlow Logo" width="200"/>
+  <img src="docs/images/logo_transparent.png" alt="MediaFlow Logo" width="200"/>
 
   <p><strong>A flexible, high-performance gallery for browsing and managing images, with special support for LoRA model previews</strong></p>
 
