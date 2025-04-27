@@ -13,6 +13,7 @@ interface MainContentProps {
   isGrouped: boolean;
   viewMode: ViewMode;
   scrollContainerRef: React.RefObject<HTMLElement>;
+  // animationPipeline: AnimationPipeline;
 }
 
 // MainContent component that renders the primary content area of the application
@@ -26,6 +27,7 @@ const MainContent: React.FC<MainContentProps> = ({
   isGrouped,
   viewMode,
   scrollContainerRef,
+  // animationPipeline,
 }) => {
   // Removed the filtering logic for now. Search needs to be handled differently.
   // const filteredImages = useMemo(() => {
@@ -46,6 +48,7 @@ const MainContent: React.FC<MainContentProps> = ({
         isGrouped={isGrouped}
         viewMode={viewMode}
         scrollContainerRef={scrollContainerRef}
+        // animationPipeline={animationPipeline}
       />
     </>
   );

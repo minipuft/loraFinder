@@ -1,46 +1,5 @@
-# System Requirements
-
-## 1. Runtime Environment
-
-- **Node.js:** Version `>=18.0.0` (as specified in `package.json` engines)
-- **npm:** Version `>=9.0.0` recommended (implied, based on modern Node versions and project setup)
-
-## 2. Operating System
-
-- **Development:** Windows, macOS, Linux (any OS capable of running Node.js and npm).
-- **Deployment:** Any OS capable of running Node.js `>=18.0.0`.
-
-## 3. Browser Compatibility (Client-Side)
-
-- Latest versions of major modern browsers:
-  - Google Chrome
-  - Mozilla Firefox
-  - Microsoft Edge
-  - Safari
-- Assumes support for ES modules, modern JavaScript (ESNext features transpiled by Vite), CSS variables, Flexbox, Grid, etc.
-
-## 4. Hardware (Server-Side)
-
-- **RAM:** Sufficient memory to run Node.js, Express, and handle image processing (Sharp can be memory-intensive). Dependent on the size and number of images being processed.
-- **CPU:** Adequate processing power for Node.js and image manipulation.
-- **Disk Space:** Sufficient storage for the application code, dependencies, and potentially cached data. The primary storage requirement will be determined by the size of the image library defined by `MAIN_DIRECTORY`.
-
-## 5. Development Tools
-
-- **Git:** For version control.
-- **Code Editor:** VS Code, WebStorm, Cursor, or any editor with good TypeScript and React support.
-
-## 6. Configuration (Environment Variables)
-
-See `.env.example` for a full list and default values.
-
-- **`PORT`:** Port the server listens on (default: `3000`).
-- **`MEDIA_LIBRARY_PATH`:** Path to the root directory containing media files (default: `./media`).
-- **`VITE_API_BASE_URL`:** Base URL for the API endpoints used by the client (default: `http://localhost:3000/api`).
-- **`SERVER_LRU_MAX_ITEMS`:** Maximum number of items the server-side LRU cache will hold (default: `500`). Used for caching frequently accessed data like image dimensions.
-- **`SERVER_LRU_TTL_MS`:** Time-to-live (in milliseconds) for items in the server-side LRU cache (default: `3600000`, i.e., 1 hour). After this time, cached items are considered stale.
-
-## 5. Development Tools
-
-- **Git:** For version control.
-- **Code Editor:** VS Code, WebStorm, Cursor, or any editor with good TypeScript and React support.
+---
+description:
+globs:
+alwaysApply: false
+---

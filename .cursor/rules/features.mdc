@@ -42,6 +42,15 @@ This document outlines the core features of the MediaFlow application.
 - **Commitlint:** Enforces conventional commit message format.
 - **Husky & lint-staged:** Automate checks before commits.
 
+## 6. Animations
+
+- **Animation Pipeline:** Uses a centralized animation system (`src/utils/AnimationSystem.ts`) powered by GSAP and ScrollTrigger for hover, page-enter, morph, and scroll-based animations.
+- **Triggers & Context:** Animation triggers (e.g., `pageEnter`, custom events) are managed via `AnimationControllerContext` (`src/contexts/AnimationControllerContext.tsx`), enabling declarative animation control across components.
+- **Custom Eases & Scroll Animations:** Defines custom easing functions (`smoothOut`, `gentleIn`) and scroll-triggered animations via `ScrollTriggerManager`.
+- **Integration with UI:** Components use `useAnimationController` to trigger animations on lifecycle events or interactions.
+- **Performance Considerations:** Animations are managed off the main thread where possible and throttled/debounced to avoid layout thrashing.
+- **Grouping & Ungrouping Animations:** Implements a hybrid approach combining GSAP (`src/animations/GroupingAnimator.ts`) for piling cards into a deck and Framer Motion's `<AnimatePresence>` exit variants in `src/components/ImageRow.tsx` for spreading them back into the grid, coordinated by the unified effect in `src/components/ImageFeed.tsx`.
+
 ## Edge Cases & Business Rules
 
 - **File Access:** The application only has access to files within the `MAIN_DIRECTORY` specified in the environment variables.

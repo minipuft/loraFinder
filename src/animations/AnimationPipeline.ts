@@ -1,20 +1,21 @@
 import { gsap } from 'gsap';
-import { MotionPresetName, gsapConfigs } from './motionPresets';
+import { gsapConfigs } from './motionPresets';
 
 // Define the structure for a step in the pipeline
 interface AnimationStepOptions {
   delay?: number | string; // GSAP delay or position parameter like "+=0.5"
-  duration?: number;
-  ease?: string;
+  // duration?: number; // Removed: Will be part of vars
+  // ease?: string;   // Removed: Will be part of vars
   // Add other potential GSAP overrides if needed
 }
 
 interface AnimationStep {
   id?: string; // Optional ID for the step
   target: gsap.DOMTarget; // Element(s) to animate
-  preset: MotionPresetName; // Name of the preset to use
-  options?: AnimationStepOptions; // Overrides for this specific step
-  // Later: Add 'type' for spring vs preset, 'engine' for Framer vs GSAP
+  preset: keyof typeof gsapConfigs | 'none'; // Use keys from gsapConfigs directly OR 'none'
+  // options?: AnimationStepOptions; // Removed: Replace with vars
+  vars?: gsap.TweenVars; // Allow any GSAP vars to be passed
+  position?: number | string; // Optional: GSAP position parameter (like "+=0.5", replaces delay in options)
 }
 
 // Type guard to check if a config has initialVars
@@ -40,28 +41,40 @@ export class AnimationPipeline {
   addStep(step: AnimationStep): this {
     if (!this.timeline) return this; // Don't add if killed
 
-    const { target, preset, options = {} } = step;
-    const presetConfig = gsapConfigs[preset];
+    const { target, preset, vars = {}, position } = step;
 
-    if (!presetConfig) {
-      console.warn(`[AnimationPipeline] Preset "${preset}" not found in gsapConfigs.`);
-      return this;
+    let tweenVars: gsap.TweenVars = { ...vars }; // Start with step-specific vars
+    let initialTweenVars: gsap.TweenVars | undefined = undefined;
+
+    if (preset !== 'none') {
+      const presetConfig = gsapConfigs[preset];
+
+      if (!presetConfig) {
+        console.warn(`[AnimationPipeline] Preset "${preset}" not found in gsapConfigs.`);
+        // If preset is required, you might return here or throw an error
+        // If vars alone are acceptable, we can proceed with just those.
+      } else {
+        // Combine defaults, preset vars, and step vars
+        tweenVars = {
+          ...presetConfig.defaults, // Start with preset defaults
+          ...presetConfig.vars, // Layer preset main variables
+          ...vars, // Layer step-specific overrides
+        };
+
+        // Handle initial state if the preset defines it
+        if (hasInitialVars(presetConfig)) {
+          initialTweenVars = presetConfig.initialVars;
+        }
+      }
     }
 
-    // Combine defaults, step options, and preset variables
-    const tweenVars: gsap.TweenVars = {
-      ...presetConfig.defaults,
-      ...options,
-      ...presetConfig.vars,
-    };
-
-    // Handle initial state using the type guard
-    if (hasInitialVars(presetConfig)) {
-      gsap.set(target, presetConfig.initialVars);
+    // Apply initial state if defined (either from preset or potentially step vars in future)
+    if (initialTweenVars) {
+      gsap.set(target, initialTweenVars);
     }
 
     // Add the tween to the timeline
-    this.timeline.to(target, tweenVars, options?.delay);
+    this.timeline.to(target, tweenVars, position);
     this.steps.push(step); // Store the step definition
 
     return this; // Allow chaining
@@ -135,10 +148,19 @@ export class AnimationPipeline {
     this.steps = [];
   }
 
+  /**
+   * Clears all tweens and labels from the timeline without killing it.
+   * Useful for reconfiguring a pipeline without destroying the instance.
+   */
+  clear(): this {
+    this.timeline?.clear(); // Use GSAP's clear method
+    this.steps = []; // Also clear our internal step tracking
+    return this;
+  }
+
   // --- Future additions ---
   // addFramerStep(...) - To control Framer Motion components
   // addSpringStep(...) - To integrate react-spring
-  // clear() - To remove steps without killing the timeline instance
   // seek() - To jump to a specific time/label
   // progress() - To get/set progress
 }

@@ -34,6 +34,13 @@ alwaysApply: false
 - **Environment Variables:** Use `.env` files for configuration (e.g., `VITE_PORT`, `VITE_HOST`, `MAIN_DIRECTORY`). Access them using `process.env` on the server and `import.meta.env` on the Vite client.
 - **Error Handling:** Implement consistent error handling for API calls (client-side) and server-side operations (API routes, file system access).
 - **SSR Considerations:** Ensure components are SSR-compatible. Avoid direct DOM manipulation outside of `useEffect` hooks. Be mindful of code that relies solely on browser APIs during server rendering.
+- **Animation Integration:**
+  - The core animation pipeline remains powered by GSAP via `AnimationPipeline` (`src/animations/AnimationPipeline.ts`).
+  - For grid grouping/ungrouping, a new hybrid approach is used:
+    1. `GroupingAnimator` (`src/animations/GroupingAnimator.ts`) orchestrates GSAP timelines to pile cards into a deck on grouping transitions.
+    2. Framer Motion's `<AnimatePresence>` and `exit` variants in `ImageRow` handle ungrouping, smoothly flying cards back to the grid before removal.
+    3. A unified effect in `ImageFeed` defers React state updates until after the GSAP animation on grouping, or immediately on ungrouping, ensuring continuous 60fps flow.
+  - Components should be wrapped in `<AnimatePresence exitBeforeEnter>` and use `layout` props on motion elements for automatic layout transitions.
 - **Dependencies:** Keep dependencies up-to-date. Use `npm install` for adding dependencies. Validate dependencies using `npm run validate:deps`.
 - **Security:** Sanitize user inputs, validate data using libraries like Zod, be mindful of file system access permissions, and avoid exposing sensitive information.
 

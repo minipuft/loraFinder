@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout.js';
 import MainContent from '../components/MainContent.js';
+import { useAnimationController } from '../contexts/AnimationControllerContext';
 import { useFolderImages } from '../hooks/query/useFolderImages';
 import { useAnimationPipeline } from '../hooks/useAnimationPipeline';
 import { ViewMode } from '../types/index.js';
@@ -33,8 +34,9 @@ const Home: React.FC = () => {
 
   // --- Animation Setup ---
   const homeEnterPipeline = useAnimationPipeline({ paused: true });
+  const { trigger } = useAnimationController(); // Keep trigger if needed elsewhere
 
-  // Configure the entrance animation steps once
+  // Configure the entrance animation steps once (Existing Effect - Updated Structure)
   useEffect(() => {
     if (
       layoutWrapperRef.current &&
@@ -46,26 +48,46 @@ const Home: React.FC = () => {
         .addStep({
           target: layoutWrapperRef.current,
           preset: 'fadeIn',
-          options: { delay: 0.1, duration: 0.4 },
+          vars: { duration: 0.4 }, // Duration moved to vars
+          position: '+=0.1', // Delay moved to position
         })
         .addStep({
           target: sidebarRef.current,
           preset: 'fadeIn',
-          options: { delay: 0.2, duration: 0.4 },
+          vars: { duration: 0.4 }, // Duration moved to vars
+          position: '+=0.2', // Delay moved to position
         })
         .addStep({
           target: navbarRef.current,
           preset: 'fadeIn',
-          options: { delay: 0.2, duration: 0.4 },
+          vars: { duration: 0.4 }, // Duration moved to vars
+          position: '+=0.2', // Delay moved to position
         })
         .addStep({
           target: contentAreaRef.current,
           preset: 'fadeIn',
-          options: { delay: 0.3, duration: 0.5 },
+          vars: { duration: 0.5 }, // Duration moved to vars
+          position: '+=0.3', // Delay moved to position
         });
       // Pipeline remains paused until triggered
     }
+    // Keep dependencies minimal for setup, refs don't need to be deps here
   }, [homeEnterPipeline]);
+
+  // Restart the entrance animation whenever images finish loading for a new folder
+  const prevLoading = useRef<boolean>(true);
+  useEffect(() => {
+    // Only trigger animations when loading finishes
+    if (prevLoading.current && !isLoadingImages) {
+      console.log(
+        '[Home] Image loading finished. Restarting enter animation.' // Removed trigger log message
+      );
+      homeEnterPipeline.restart();
+    }
+    prevLoading.current = isLoadingImages;
+    // Depend on isLoadingImages and the folder path to ensure it runs on folder change finish
+    // Removed trigger from dependencies as it's no longer called here
+  }, [isLoadingImages, selectedFolder, homeEnterPipeline]);
 
   /**
    * Handler for folder selection change.
@@ -75,15 +97,6 @@ const Home: React.FC = () => {
   const handleFolderChange = (folder: string) => {
     setSelectedFolder(folder);
   };
-
-  // Restart the entrance animation whenever images finish loading for a new folder
-  const prevLoading = useRef<boolean>(true);
-  useEffect(() => {
-    if (prevLoading.current && !isLoadingImages) {
-      homeEnterPipeline.restart();
-    }
-    prevLoading.current = isLoadingImages;
-  }, [isLoadingImages, homeEnterPipeline]);
 
   /**
    * Handler for zoom level change.
@@ -147,17 +160,18 @@ const Home: React.FC = () => {
         sidebarRef={sidebarRef}
         navbarRef={navbarRef}
         contentAreaRef={contentAreaRef}
-      >
-        {/* MainContent is rendered inside Layout as children */}
-        <MainContent
-          zoom={zoom}
-          searchQuery={searchQuery}
-          selectedFolder={selectedFolder}
-          isGrouped={isGrouped}
-          viewMode={viewMode}
-          scrollContainerRef={mainScrollRef}
-        />
-      </Layout>
+        // Pass MainContent explicitly as a prop
+        mainContentSlot={
+          <MainContent
+            zoom={zoom}
+            searchQuery={searchQuery}
+            selectedFolder={selectedFolder}
+            isGrouped={isGrouped}
+            viewMode={viewMode}
+            scrollContainerRef={mainScrollRef}
+          />
+        }
+      />
     </div>
   );
 };

@@ -16,7 +16,8 @@ To provide a fast, efficient, and visually appealing web application for managin
 - **Advanced Search:** Enable users to find specific images using full-text search across metadata or filenames.
 - **Robust Backend:** Utilize a stable Express backend for reliable file system interaction and image processing.
 - **Developer Experience:** Maintain a clean, well-structured codebase using Vite, TypeScript, and modern React practices.
+- **Dynamic Animations:** Provide context-driven animations for page transitions, interactions, and scroll-based effects using a GSAP-powered animation pipeline.
 
 ## 3. High-Level Explanation
 
-MediaFlow is a full-stack application combining a React frontend (built with Vite and utilizing SSR) and an Express backend. The frontend handles user interaction, displaying folders and images in a responsive masonry layout, leveraging React Query for data fetching. The backend interacts with the file system specified by the `MAIN_DIRECTORY` environment variable, serves API endpoints for image and folder data, performs image processing using Sharp, and handles SSR requests.
+MediaFlow is a full-stack application combining a React frontend (built with Vite and utilizing SSR) and an Express backend. The frontend handles user interaction, displaying folders and images in a responsive masonry layout, leveraging React Query for data fetching. A centralized animation pipeline is implemented via `AnimationSystem` (`src/utils/AnimationSystem.ts`) and orchestrated through `AnimationControllerContext` to trigger animations (e.g., `pageEnter`, hover, morph, and scroll effects`) declaratively across components. The backend interacts with the file system specified by the `MAIN_DIRECTORY` environment variable, serves API endpoints for image and folder data, performs image processing using Sharp, and handles SSR requests.

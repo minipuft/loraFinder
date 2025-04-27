@@ -43,6 +43,10 @@ export const gsapConfigs = {
   } satisfies { defaults?: TweenVars; vars: TweenVars; restVars?: TweenVars },
 
   // Add corresponding GSAP configs...
+  instant: {
+    defaults: {}, // No default duration/ease
+    vars: {}, // All properties will be provided via options
+  } satisfies { defaults?: TweenVars; vars: TweenVars },
 };
 
 // --- Combined Type for Preset Names (ensures consistency) ---

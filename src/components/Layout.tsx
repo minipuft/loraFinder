@@ -8,6 +8,7 @@ import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { ColorProvider } from '../contexts/ColorContext';
 import { useCustomProperties } from '../hooks/useCustomProperties';
 // Import the new AuraBackground
+// import { AnimationPipeline } from '../animations/AnimationPipeline';
 import AuraBackground from './AuraBackground.js';
 // Remove ParticleBackground import
 // import ParticleBackground from './ParticleBackground.js';
@@ -16,7 +17,7 @@ gsap.registerPlugin(ScrollToPlugin);
 
 // Define the props interface for the Layout component
 interface LayoutProps {
-  children: React.ReactNode;
+  mainContentSlot: React.ReactNode;
   selectedFolder: string;
   onFolderChange: (folder: string) => void;
   onSearch: (query: string) => void;
@@ -36,7 +37,7 @@ interface LayoutProps {
 const Layout = forwardRef<HTMLDivElement, LayoutProps>(
   (
     {
-      children,
+      mainContentSlot,
       selectedFolder,
       onFolderChange,
       onSearch,
@@ -142,10 +143,10 @@ const Layout = forwardRef<HTMLDivElement, LayoutProps>(
             <main ref={mainRef} className="flex-1 overflow-auto p-4 relative bg-transparent">
               {contentAreaRef ? (
                 <div ref={contentAreaRef} className="relative z-10">
-                  {children}
+                  {mainContentSlot}
                 </div>
               ) : (
-                <div className="relative z-10">{children}</div>
+                <div className="relative z-10">{mainContentSlot}</div>
               )}
             </main>
           </div>

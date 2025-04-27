@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MotionPreset from '../animations/MotionPreset';
 import { ProcessedImageUpdate, useImageProcessing } from '../contexts/ImageProcessingContext';
@@ -264,7 +264,7 @@ const ImageItem: React.FC<ImageItemProps> = ({
     <MotionPreset
       as="div"
       preset="hoverPop"
-      className={`${styles.imageItem} group`}
+      className={`${styles.imageItem} group card`}
       layout
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -280,37 +280,33 @@ const ImageItem: React.FC<ImageItemProps> = ({
       initial={false}
       animate={false}
     >
-      <AnimatePresence>
-        {!isHighResLoaded && !hasError && (
-          <motion.div
-            key="placeholder"
-            className={styles.placeholder}
-            style={{ '--placeholder-color': placeholderColor } as React.CSSProperties}
-            variants={placeholderVariants}
-            initial="initial"
-            exit="exit"
-          />
-        )}
-      </AnimatePresence>
-
+      Proceed with the next logical step in our implemntation plan{' '}
+      {/* Placeholder skeleton: animation removed for GSAP deck-spread pipeline */}
+      {!isHighResLoaded && !hasError && (
+        <div
+          key="placeholder"
+          className={styles.placeholder}
+          style={{ '--placeholder-color': placeholderColor } as React.CSSProperties}
+        >
+          {/* static placeholder */}
+        </div>
+      )}
+      {/* High-res image: Framer Motion animation removed; using static img tag */}
       {!hasError && imageUrl && (
-        <ResponsiveImage
+        <img
           ref={imageRef}
           key={imageUrl}
           src={imageUrl}
           alt={image.alt ?? ''}
           width={targetWidth}
-          isProcessed={isProcessed}
+          loading="lazy"
           onLoad={handleImageLoad}
           onError={handleImageError}
-          className={`${styles.imageElement}`}
+          className={styles.imageElement}
           style={{ position: 'absolute', inset: 0 }}
-          animate={isHighResLoaded ? 'animate' : 'initial'}
         />
       )}
-
       {hasError && <div className={styles.errorIndicator}>Error</div>}
-
       {!hasError && (
         <motion.div
           className={styles.overlay}
@@ -321,7 +317,6 @@ const ImageItem: React.FC<ImageItemProps> = ({
           <p className={styles.title}>{truncatedTitle}</p>
         </motion.div>
       )}
-
       {!hasError && groupCount && groupCount > 1 && (
         <div className={styles.groupIndicator}>{groupCount}</div>
       )}
