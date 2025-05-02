@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: false
 ---
 # Project Timeline
@@ -18,15 +18,22 @@ _(Note: This is a placeholder document. Actual timelines and milestones need to 
 ## Phase 2: Enhancements & Optimization
 
 - **Milestone 2.1:** Implement advanced image viewing (lightbox).
-- **Milestone 2.2:** Add caching mechanisms (client and server).
-- **Milestone 2.3:** Performance optimizations (lazy loading, code splitting verification).
-- **Milestone 2.4:** Refine search functionality.
-- **Milestone 2.5:** Implement file uploads.
+- **Milestone 2.2:** Add caching mechanisms (client and server - including feed state cache).
+- **Milestone 2.3:** Implement Suspense-based loading skeletons:
+  - **Sub-task:** Modify `useFolderImages` hook to use `useSuspenseQuery`.
+  - **Sub-task:** Create `ImageFeedSkeleton` component for folder-level loading fallback.
+  - **Sub-task:** Implement folder-level `Suspense` boundary in `ImageViewer`.
+  - **Sub-task:** Create `imageResource` utility for per-image loading.
+  - **Sub-task:** Create `SuspenseImage` component.
+  - **Sub-task:** Implement per-image `Suspense` boundary in `ImageItem`.
+- **Milestone 2.4:** Performance optimizations (verify code splitting, lazy loading).
+- **Milestone 2.5:** Refine search functionality.
+- **Milestone 2.6:** Implement file uploads.
 
 ## Phase 3: Quality Assurance & Deployment
 
-- **Milestone 3.1:** Comprehensive testing (unit, integration, E2E).
-- **Milestone 3.2:** Documentation updates (README, PRD).
+- **Milestone 3.1:** Comprehensive testing (unit, integration, E2E) - including Suspense behavior.
+- **Milestone 3.2:** Documentation updates (README, PRD - `implementation.mdc` updated).
 - **Milestone 3.3:** Final performance tuning.
 - **Milestone 3.4:** Deployment preparation and execution.
 

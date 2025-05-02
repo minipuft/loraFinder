@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion';
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import MotionPreset from '../animations/MotionPreset';
+import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ProcessedImageUpdate, useImageProcessing } from '../contexts/ImageProcessingContext';
 import styles from '../styles/ImageItem.module.scss';
 import { ImageInfo } from '../types/index.js';
-import { truncateImageTitle } from '../utils/stringUtils.js';
+import ErrorBoundary from './ErrorBoundary';
+import ImageSkeleton from './ImageSkeleton';
+import SuspenseImage from './lazy/SuspenseImage';
 
 // Define hover data payload
 export interface ImageHoverData {
@@ -38,96 +39,6 @@ interface ImageItemProps {
   dominantColor?: string | null; // Added optional prop for color from worker
 }
 
-// Define animation variants
-const placeholderVariants = {
-  initial: { opacity: 1, scale: 1, filter: 'blur(0px)' }, // Start fully visible
-  exit: {
-    // Animate out when isHighResLoaded becomes true
-    opacity: 0,
-    scale: 0.98, // Slight scale down
-    // filter: 'blur(10px)', // Optional blur out
-    transition: {
-      type: 'spring',
-      stiffness: 100,
-      damping: 20,
-      duration: 0.3, // Allow spring to resolve faster
-    },
-  },
-};
-
-const imageVariants = {
-  initial: { opacity: 0, scale: 0.98 }, // Start hidden and slightly smaller
-  animate: {
-    // Animate in when isHighResLoaded becomes true
-    opacity: 1,
-    scale: 1,
-    transition: {
-      type: 'spring',
-      stiffness: 120,
-      damping: 25,
-      delay: 0.05, // Slight delay to ensure placeholder starts exiting
-    },
-  },
-};
-
-// ResponsiveImage component (Refined & Forwarding Ref)
-interface ResponsiveImageProps {
-  src: string;
-  alt: string;
-  width?: number;
-  isProcessed: boolean;
-  onLoad: () => void;
-  onError: () => void;
-  className?: string;
-  style?: React.CSSProperties;
-  animate?: 'initial' | 'animate'; // Control animation state from parent
-}
-
-const ResponsiveImage = React.forwardRef<HTMLImageElement, ResponsiveImageProps>(
-  (
-    { src, alt, width, isProcessed, onLoad, onError, className, style, animate = 'initial' },
-    ref
-  ) => {
-    const handleLoad = useCallback(() => {
-      onLoad();
-    }, [onLoad]);
-
-    const handleError = useCallback(() => {
-      onError();
-    }, [onError]);
-
-    const useSrcSet = !isProcessed && width && !src.startsWith('blob:');
-    const srcSet = useSrcSet
-      ? [
-          `${src}&w=${Math.round(width as number)} 1x`,
-          `${src}&w=${Math.round((width as number) * 2)} 2x`,
-          `${src}&w=${Math.round((width as number) * 3)} 3x`,
-        ].join(', ')
-      : undefined;
-    const sizes = useSrcSet ? `${Math.round(width as number)}px` : undefined;
-
-    return (
-      <motion.img
-        ref={ref}
-        key={src}
-        src={src}
-        alt={alt}
-        className={className}
-        style={style}
-        loading="lazy"
-        variants={imageVariants}
-        initial="initial"
-        animate={animate}
-        onLoad={handleLoad}
-        onError={handleError}
-        srcSet={srcSet}
-        sizes={sizes}
-      />
-    );
-  }
-);
-ResponsiveImage.displayName = 'ResponsiveImage';
-
 const ImageItem: React.FC<ImageItemProps> = ({
   image,
   onClick,
@@ -145,7 +56,6 @@ const ImageItem: React.FC<ImageItemProps> = ({
   dominantColor,
 }) => {
   const imageRef = useRef<HTMLImageElement>(null);
-  const [isHighResLoaded, setIsHighResLoaded] = useState(false);
   const [processedUrls, setProcessedUrls] = useState<{ low?: string; high?: string }>({});
   const [hasError, setHasError] = useState(false);
   const { subscribeToImageUpdates } = useImageProcessing();
@@ -234,93 +144,84 @@ const ImageItem: React.FC<ImageItemProps> = ({
   }, []);
 
   const imageUrl = useMemo(() => {
-    if (hasError) return '';
     if (processedUrls.high) return processedUrls.high;
     if (processedUrls.low) return processedUrls.low;
     return image.src;
-  }, [image.src, processedUrls, hasError]);
-
-  const isProcessed = !!(processedUrls.low || processedUrls.high);
-
-  const handleImageLoad = useCallback(() => {
-    if (imageUrl === processedUrls.high || (!processedUrls.high && imageUrl === image.src)) {
-      setIsHighResLoaded(true);
-    }
-    setHasError(false);
-  }, [imageUrl, processedUrls.high, image.src, image.id]);
+  }, [image.src, processedUrls]);
 
   const handleImageError = useCallback(() => {
-    console.error(`ImageItem: Failed to load image ${image.id}`, imageUrl);
+    console.error(`[ImageItem ${image.id}] Failed to load image: ${imageUrl}`);
     setHasError(true);
     onImageLoadError(image.id);
-  }, [image.id, imageUrl, onImageLoadError]);
+    if (imageUrl === processedUrls.high || imageUrl === processedUrls.low) {
+      setProcessedUrls({});
+    }
+  }, [imageUrl, image.id, onImageLoadError, processedUrls]);
 
-  const truncatedTitle = useMemo(
-    () => truncateImageTitle(image.alt || image.title || 'Untitled'),
-    [image.alt, image.title]
-  );
+  const handleClick = useCallback(() => {
+    onClick(image);
+  }, [onClick, image]);
+
+  if (hasError) {
+    return (
+      <div
+        className={`${styles.imageItem} ${styles.imageError}`}
+        style={{
+          width: targetWidth,
+          height: targetHeight,
+          aspectRatio: aspectRatio,
+        }}
+      >
+        Error
+      </div>
+    );
+  }
 
   return (
-    <MotionPreset
-      as="div"
-      preset="hoverPop"
-      className={`${styles.imageItem} group card`}
+    <motion.div
+      className={styles.imageItemContainer}
       layout
+      style={{
+        width: targetWidth,
+        height: targetHeight,
+        maxWidth: '100%',
+        aspectRatio: aspectRatio,
+        position: 'relative',
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onClick={() => onClick(image)}
-      style={{
-        position: 'relative',
-        width: `${width}px`,
-        height: `${height}px`,
-        overflow: 'hidden',
-        cursor: 'pointer',
-        aspectRatio: aspectRatio,
-      }}
-      initial={false}
-      animate={false}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      aria-label={image.title || 'Image'}
     >
-      Proceed with the next logical step in our implemntation plan{' '}
-      {/* Placeholder skeleton: animation removed for GSAP deck-spread pipeline */}
-      {!isHighResLoaded && !hasError && (
-        <div
-          key="placeholder"
-          className={styles.placeholder}
-          style={{ '--placeholder-color': placeholderColor } as React.CSSProperties}
+      <ErrorBoundary
+        fallback={<div className={`${styles.imageItem} ${styles.imageError}`}>Error</div>}
+      >
+        <Suspense
+          fallback={
+            <ImageSkeleton
+              containerWidth={targetWidth}
+              containerHeight={targetHeight}
+              placeholderColor={placeholderColor}
+            />
+          }
         >
-          {/* static placeholder */}
-        </div>
-      )}
-      {/* High-res image: Framer Motion animation removed; using static img tag */}
-      {!hasError && imageUrl && (
-        <img
-          ref={imageRef}
-          key={imageUrl}
-          src={imageUrl}
-          alt={image.alt ?? ''}
-          width={targetWidth}
-          loading="lazy"
-          onLoad={handleImageLoad}
-          onError={handleImageError}
-          className={styles.imageElement}
-          style={{ position: 'absolute', inset: 0 }}
-        />
-      )}
-      {hasError && <div className={styles.errorIndicator}>Error</div>}
-      {!hasError && (
-        <motion.div
-          className={styles.overlay}
-          initial={{ opacity: 0 }}
-          whileHover={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
-        >
-          <p className={styles.title}>{truncatedTitle}</p>
-        </motion.div>
-      )}
-      {!hasError && groupCount && groupCount > 1 && (
-        <div className={styles.groupIndicator}>{groupCount}</div>
-      )}
-    </MotionPreset>
+          <SuspenseImage
+            key={imageUrl}
+            src={imageUrl}
+            alt={image.alt || image.title || ''}
+            className={styles.imageItemImage}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+            onError={handleImageError}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    </motion.div>
   );
 };
 

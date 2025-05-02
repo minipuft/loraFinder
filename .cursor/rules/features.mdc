@@ -13,10 +13,12 @@ This document outlines the core features of the MediaFlow application.
 - **Folder Data API:** The `/api/folders` endpoint provides data about folder contents.
 - **Image Data API:** The `/api/images`, `/api/image`, and `/api/image/[...params]` endpoints provide data for individual images or lists of images within folders.
 - **Upload Functionality:** Users can upload new image files via the `/api/upload` endpoint (specific UI implementation details may vary).
+- **LoRA Preview Support:** Clean and process LoRA preview files (e.g., `.example.x`) for accurate display.
 
 ## 2. Image Viewing
 
 - **Masonry Grid Layout:** Images are displayed in a responsive masonry grid, adapting to different screen sizes.
+- **Multiple View Modes:** Users can switch between Grid, Banner, Masonry, Carousel, and Grouped layouts seamlessly.
 - **Lazy Loading:** Images are loaded progressively as the user scrolls to improve initial load time and performance.
 - **SSR (Server-Side Rendering):** Initial page loads are rendered on the server for faster perceived performance and better SEO.
 - **Image Processing:** The backend uses Sharp for potential image processing tasks (e.g., thumbnail generation, although specific implementation details should be verified).

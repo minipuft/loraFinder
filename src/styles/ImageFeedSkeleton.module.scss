@@ -1,0 +1,28 @@
+.skeletonGrid {
+  // Inherit general grid styles or define specifically
+  // display: grid; // Set in inline style
+  // gap: ...; // Set in inline style
+  // padding: ...; // Set in inline style
+  width: 100%;
+  opacity: 0.7; // Make skeleton slightly transparent
+  animation: skeletonFadeIn 0.3s ease-out;
+}
+
+.loadingFallback {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px; // Ensure fallback has some height
+  width: 100%;
+  color: var(--text-muted-color, #888); // Use theme variable if available
+  font-style: italic;
+}
+
+@keyframes skeletonFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.7;
+  }
+}

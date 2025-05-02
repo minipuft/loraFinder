@@ -1,12 +1,13 @@
-import React from 'react';
-import ReactDOMServer from 'react-dom/server';
-import App from './App.js';
+import { renderToPipeableStream } from 'react-dom/server';
+import { StaticRouter } from 'react-router-dom/server';
+import AppRouter from './routes/AppRouter';
 
-export function render() {
-  const html = ReactDOMServer.renderToString(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
+// Export a render function that returns the pipeable stream for SSR
+export function render(url: string, options: Parameters<typeof renderToPipeableStream>[1]) {
+  return renderToPipeableStream(
+    <StaticRouter location={url}>
+      <AppRouter />
+    </StaticRouter>,
+    options
   );
-  return { html };
 }

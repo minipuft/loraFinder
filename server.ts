@@ -1,17 +1,16 @@
+import dotenv from 'dotenv';
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
-import path from 'path';
+import path, { dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { createServer as createViteServer } from 'vite';
 import foldersRouter from './src/api/folders.js';
+import getCurrentDirectoryRouter from './src/api/getCurrentDirectory.js';
 import imageRouter from './src/api/image.js';
-import imagesRouter from './src/api/images.js';
 import imageParamsRouter from './src/api/image/[...params].js';
+import imagesRouter from './src/api/images.js';
 import searchRouter from './src/api/search.js';
 import uploadRouter from './src/api/upload.js';
-import getCurrentDirectoryRouter from './src/api/getCurrentDirectory.js';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import dotenv from 'dotenv';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,17 +67,25 @@ async function startServer() {
         // 2. Apply Vite HTML transforms
         template = await vite.transformIndexHtml(url, template);
 
-        // 3. Load the server entry
+        // 3. Stream-render the app using renderToPipeableStream
+        const [head, tail] = template.split('<!--ssr-outlet-->');
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/html');
+        res.write(head);
+
         const { render } = await vite.ssrLoadModule('/src/entry-server.tsx');
-
-        // 4. Render the app HTML
-        const appHtml = await render(url);
-
-        // 5. Inject the app-rendered HTML into the template
-        const html = template.replace('<!--ssr-outlet-->', appHtml);
-
-        // 6. Send the rendered HTML back
-        res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+        const stream = render(url, {
+          onShellReady() {
+            stream.pipe(res, { end: false });
+          },
+          onAllReady() {
+            res.write(tail);
+            res.end();
+          },
+          onError(err: unknown) {
+            console.error('SSR error:', err);
+          },
+        });
       } catch (e) {
         vite.ssrFixStacktrace(e as Error);
         next(e);

@@ -1,5 +1,43 @@
 ---
-description:
-globs:
+description: Requirements for Project Installation
+globs: 
 alwaysApply: false
 ---
+# Requirements
+
+## System Requirements
+- **Node.js** version >= 18.0.0 (specified in engines)
+- **npm** version >= 9.0.0
+- **Operating System:** Cross-platform (Windows, macOS, Linux)
+
+## Development Dependencies
+- **TypeScript** ^5.0.4
+- **Vite** ^5.4.12
+- **ESLint** & **Prettier** for code linting and formatting
+- **Husky** & **lint-staged** for git hooks
+- **Sass** ^1.78.0 & **PostCSS** ^8.x for styling
+- **tailwindcss** ^3.4.10 & **@tailwindcss/aspect-ratio** ^0.4.2
+- **Concurrently**, **cross-env**, **tsx** for dev scripts
+- **Commitlint**, **commitlint-config-conventional** for commit message standards
+- **Jest** & **@testing-library/react** for testing
+- **Madge**, **depcheck** for dependency analysis
+
+## Runtime Dependencies
+- **Express** ^4.19.2
+- **@tanstack/react-query** & **React** 18.x
+- **axios**, **dotenv**, **sharp**, **formidable**, **uuid**, **p-queue**
+
+## Environment Variables
+- **MAIN_DIRECTORY**: Root path of image directory to serve
+- **VITE_PORT**: Port for Vite & Express server (default: 3001)
+- **VITE_HOST**: Hostname for server (default: localhost)
+- **SERVER_LRU_MAX_ITEMS**: Max items for server-side LRU cache
+- **SERVER_LRU_TTL_MS**: TTL for server-side cache entries
+- **DATABASE_URL** (optional): If a database is configured in the future
+
+## npm Scripts
+- **dev**: Runs both client and server in development mode (`npm run dev:client` & `npm run dev:server`)
+- **build**: Cleans and builds client & server for production
+- **start**: Starts the production server
+- **lint**: Runs ESLint across the project
+- **format**: Runs Prettier to format code

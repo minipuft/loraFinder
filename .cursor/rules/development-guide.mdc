@@ -1,0 +1,71 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Development Guide
+
+This document provides comprehensive instructions for setting up, running, and maintaining the MediaFlow project.
+
+## 1. Prerequisites
+
+- Node.js >= 18.0.0
+- npm >= 9.0.0
+- Operating System: Cross-platform (Windows, macOS, Linux)
+- A directory containing your images or LoRA model files
+
+## 2. Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/mediaflow.git
+cd mediaflow
+
+# Install dependencies
+npm install
+```
+
+## 3. Configuration
+
+Create a `.env` file in the project root:
+
+```env
+VITE_PORT=3001
+VITE_HOST=localhost
+MAIN_DIRECTORY=/path/to/your/image/directory
+SERVER_LRU_MAX_ITEMS=1000
+SERVER_LRU_TTL_MS=3600000
+```
+
+## 4. Running Locally
+
+```bash
+npm run dev
+# Open http://localhost:3001 in your browser
+```
+
+## 5. Production Build & Start
+
+```bash
+npm run build
+npm start
+```
+
+## 6. Code Quality & Validation
+
+- `npm run lint` to run ESLint across the project
+- `npm run format` to format code with Prettier
+- `npm run typecheck` to perform TypeScript type checks
+- `npm run test` to execute unit and integration tests
+- `npm run validate:deps` to verify dependency health
+
+## 7. Dependency Analysis
+
+- `npm run check:circular` to detect circular dependencies
+- `npm run check:unused` to identify unused packages
+
+## 8. Related Rules
+
+- See `.cursor/rules/requirements.mdc` for system requirements
+- See `.cursor/rules/project-structure.mdc` for project layout
+- See `.cursor/rules/implementation.mdc` for coding guidelines

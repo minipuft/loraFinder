@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout.js';
 import MainContent from '../components/MainContent.js';
 import { useAnimationController } from '../contexts/AnimationControllerContext';
-import { useFolderImages } from '../hooks/query/useFolderImages';
 import { useAnimationPipeline } from '../hooks/useAnimationPipeline';
 import { ViewMode } from '../types/index.js';
 import { getHomeDirectory } from '../utils/settings.js';
@@ -19,7 +18,6 @@ const Home: React.FC = () => {
   const [selectedFolder, setSelectedFolder] = useState<string>(() => {
     return getHomeDirectory() || '';
   });
-  const { data: images, isLoading: isLoadingImages } = useFolderImages(selectedFolder);
   const [zoom, setZoom] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isGrouped, setIsGrouped] = useState<boolean>(true);
@@ -69,25 +67,14 @@ const Home: React.FC = () => {
           vars: { duration: 0.5 }, // Duration moved to vars
           position: '+=0.3', // Delay moved to position
         });
-      // Pipeline remains paused until triggered
+      // Play the animation immediately on mount now
+      homeEnterPipeline.play();
     }
-    // Keep dependencies minimal for setup, refs don't need to be deps here
-  }, [homeEnterPipeline]);
-
-  // Restart the entrance animation whenever images finish loading for a new folder
-  const prevLoading = useRef<boolean>(true);
-  useEffect(() => {
-    // Only trigger animations when loading finishes
-    if (prevLoading.current && !isLoadingImages) {
-      console.log(
-        '[Home] Image loading finished. Restarting enter animation.' // Removed trigger log message
-      );
-      homeEnterPipeline.restart();
-    }
-    prevLoading.current = isLoadingImages;
-    // Depend on isLoadingImages and the folder path to ensure it runs on folder change finish
-    // Removed trigger from dependencies as it's no longer called here
-  }, [isLoadingImages, selectedFolder, homeEnterPipeline]);
+    // Cleanup on unmount
+    return () => {
+      homeEnterPipeline.kill();
+    };
+  }, [homeEnterPipeline]); // Depends only on the pipeline instance now
 
   /**
    * Handler for folder selection change.

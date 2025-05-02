@@ -1,5 +1,5 @@
 ---
-description: Codebase Framework
+description: Guidelines on implementing a plan into our codebase.
 globs:
 alwaysApply: false
 ---
@@ -44,22 +44,56 @@ alwaysApply: false
 - **Dependencies:** Keep dependencies up-to-date. Use `npm install` for adding dependencies. Validate dependencies using `npm run validate:deps`.
 - **Security:** Sanitize user inputs, validate data using libraries like Zod, be mindful of file system access permissions, and avoid exposing sensitive information.
 
+## 3.1 Code Splitting & Lazy Loading
+
+- **Route-Level Splitting:**
+  - Use `react-router-dom@6` with dynamic imports via `React.lazy` in `src/routes/AppRouter.tsx`.
+  - Wrap all `<Routes>` in `<Suspense>` with a `<Spinner />` fallback (create `src/components/Spinner.tsx`).
+  - Replace the top-level `<App />` in `src/main.tsx` with `<AppRouter />`, wrapped by `AnimationControllerProvider` and `ColorProvider`.
+
+- **SSR Streaming Integration:**
+  - Swap server rendering from `renderToString` to `renderToPipeableStream` in `src/entry-server.tsx` and `server.ts`.
+  - Use `<StaticRouter>` from `react-router-dom/server`, split `index.html` around `<!--ssr-outlet-->`, and stream head, content, and tail.
+  - Ensure proper `Content-Type` header and error handling in the streaming callbacks.
+
+- **View & Widget-Level Splitting:**
+  - Create `src/lazy/widgets.ts` exporting `LazyImageFeed`, `LazyMasonryView`, `LazyCarouselView`, `LazyBannerView` via `React.lazy`.
+  - In `ImageViewer.tsx`, wrap `<LazyImageFeed>` in `<Suspense>` + `<ErrorBoundary>` (create `ErrorBoundary` component).
+  - In `ImageFeed.tsx`, replace direct imports of view components with lazy variants from `src/lazy/widgets.ts`, wrapped in `<Suspense>` + `<ErrorBoundary>`.
+
+- **Prefetching:**
+  - Add `onMouseEnter={() => import('../pages/Gallery')}` (and similar for future routes) on navigation `<Link>` elements to prefetch route chunks.
+
+- **Testing & Validation:**
+  - Write Jest + React Testing Library unit tests for `AppRouter` to assert correct route rendering.
+  - Add Supertest SSR integration tests for streaming endpoint, verifying minimal SSR output and non-inclusion of non-current chunks.
+  - Create E2E tests (Cypress or Playwright) that navigate between routes and confirm on-demand chunk loading via network inspection.
+
+## 3.2 Suspense Integration (Folder & Image Loading)
+
+- **Folder Change Skeleton (Phase 1):**
+  - **Data Fetching:** Modified `src/hooks/query/useFolderImages.ts` to use `useSuspenseQuery` instead of `useQuery`. This hook now throws a promise when fetching data for a new folder, triggering the nearest Suspense boundary. Removed `placeholderData` logic.
+  - **Skeleton Component:** Created `src/components/ImageFeedSkeleton.tsx`. This component calculates an estimated grid layout (columns, rows) using `src/utils/layoutCalculator.ts` based on container width, view mode, and zoom props. It renders a grid of `src/components/ImageSkeleton.tsx` components as placeholders.
+  - **Suspense Boundary:** Located the parent component rendering `<LazyImageFeed>` (in `src/components/ImageViewer.tsx`). Wrapped `<LazyImageFeed>` within a `<Suspense key={selectedFolder} fallback={<ImageFeedSkeleton ... />}>` boundary. The `key={selectedFolder}` ensures the boundary resets and shows the fallback immediately upon folder path change. Container width is measured in `ImageViewer` and passed to the skeleton.
+
+- **Per-Image Suspense (Phase 2):**
+  - **Image Resource:** Created `src/utils/imageResource.ts`. This utility exports an object with a `read(src)` method that manages a cache (`Map`) of image loading promises. Calling `read()` initiates image loading if not cached and throws the promise if loading is in progress (integrating with React Suspense).
+  - **Suspense Image Component:** Created `src/components/SuspenseImage.tsx`. This component takes standard `<img>` props, calls `imageResource.read(src)`, and renders the actual `<img>` tag only after the promise resolves (i.e., the image is loaded).
+  - **Integration:** Modified `src/components/ImageItem.tsx`. Replaced the previous image rendering logic (which included internal `ResponsiveImage` and placeholder state) with the new `<SuspenseImage />`. Wrapped this component within `<Suspense fallback={<ImageSkeleton ... />}>` to show a per-image skeleton during load, and further wrapped by `<ErrorBoundary>` to catch potential loading errors from the image resource or component. The `src` passed to `SuspenseImage` prioritizes high/low-res blob URLs obtained via context before falling back to the original image source.
+
 ## 4. Caching Strategy
 
 - **Client-Side:**
-  - **React Query:** Manages caching of server state (API responses) based on query keys and configurable stale/cache times.
-  - **IndexedDB (`idb`):** Used for persistent client-side storage, specifically for remembering UI state like scroll positions (`src/lib/cache/feedStateCache.ts`).
+  - **React Query:** Manages caching of server state (API responses).
+    - **Persistence:** The cache is persisted across browser sessions using IndexedDB. This is achieved via `@tanstack/query-persist-client-core` and a custom persister (`src/lib/queryClient/idbPersister.ts`) built with the `idb` library.
+    - **Configuration:** The cache has a garbage collection time (`gcTime`) and persistence duration (`maxAge`) set to 24 hours (see `src/lib/queryClient.ts`).
+  - **IndexedDB (`idb`):** Also used for persistent client-side storage of UI state like scroll positions (`src/lib/cache/feedStateCache.ts`).
 - **Server-Side:**
   - **LRU Cache (`lru-cache`):** An in-memory Least Recently Used (LRU) cache is implemented (`src/server/lib/cache/`) to store frequently accessed, computationally inexpensive data (e.g., image dimensions read from disk).
     - **Implementation:** Uses a common `CacheProvider` interface (`src/server/lib/cache/types.ts`), an LRU provider (`src/server/lib/cache/providers/lruCache.ts`), and a factory function (`src/server/lib/cache/index.ts`).
     - **Configuration:** Configurable via environment variables (`SERVER_LRU_MAX_ITEMS`, `SERVER_LRU_TTL_MS`).
     - **Goal:** Reduce redundant disk I/O and improve response times for repeated requests.
   - **Other (Potential):** `node-cache` might be used for other server-side caching needs if LRU semantics are not required.
-
-- **Error Handling:** Implement consistent error handling for API calls (client-side) and server-side operations (API routes, file system access).
-- **SSR Considerations:** Ensure components are SSR-compatible. Avoid direct DOM manipulation outside of `useEffect` hooks. Be mindful of code that relies solely on browser APIs during server rendering.
-- **Dependencies:** Keep dependencies up-to-date. Use `npm install` for adding dependencies. Validate dependencies using `npm run validate:deps`.
-- **Security:** Sanitize user inputs, validate data using libraries like Zod, be mindful of file system access permissions, and avoid exposing sensitive information.
 
 ## TODO
 

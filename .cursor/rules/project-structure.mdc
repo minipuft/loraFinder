@@ -1,5 +1,61 @@
 ---
 description:
 globs:
-alwaysApply: false
+alwaysApply: true
 ---
+# Project Structure
+
+The following is the high-level directory and file organization for the MediaFlow project:
+https://deepwiki.com/minipuft/mediaFlow/1-overview
+```text
+.
+├── .cursor/
+│   └── rules/             # AI assistant rule definitions and documentation
+├── .husky/                # Git hooks via Husky
+├── .github/               # CI/CD workflows (GitHub Actions)
+├── agents/                # Agent scripts or workflows
+├── dist/                  # Build output
+│   ├── client/
+│   │   └── workers/       # Compiled client-side web workers
+│   └── server/
+│       └── assets/        # Compiled server assets (e.g., static files)
+├── docs/                  # Project documentation and guides
+│   └── images/            # Documentation assets
+├── public/                # Static files served by Express
+├── Scripts/               # Custom utility scripts
+├── src/                   # Application source code
+│   ├── animations/        # Animation pipeline and controllers
+│   ├── api/               # Frontend API client modules (React Query hooks)
+│   ├── components/        # Reusable React components
+│   │   └── views/         # Page-level view components
+│   ├── contexts/          # React Context providers
+│   ├── hooks/             # Custom React hooks
+│   │   ├── __tests__/     # Hook unit tests
+│   │   └── query/         # Data-fetching hooks (React Query)
+│   ├── lib/               # Shared utility libraries
+│   │   ├── cache/         # Client-side UI state caching (e.g., scroll)
+│   │   └── queryClient/   # React Query client setup & persistence
+│   ├── pages/             # Entry points for server-side rendering
+│   ├── server/            # Server-side modules and API routes
+│   │   └── lib/
+│   │       └── cache/     # Server-side cache providers
+│   ├── styles/            # Global and SCSS module styles
+│   ├── types/             # TypeScript type definitions
+│   ├── utils/             # Utility functions (e.g., webgl helpers)
+│   │   └── webgl/
+│   └── workers/           # Web Worker source code
+├── system_prompts/        # Internal system prompt templates for AI assistant
+├── index.html             # Base HTML template for SSR
+├── server.ts              # Express server entry point (integrated with Vite middleware)
+├── package.json           # Project metadata and dependencies
+├── tsconfig.base.json     # Base TypeScript configuration
+├── tsconfig.client.json   # Client-specific TypeScript config
+├── tsconfig.server.json   # Server-specific TypeScript config
+├── vite.config.client.ts  # Vite config for client build
+├── vite.config.server.ts  # Vite config for server build
+└── README.md              # Project overview and setup instructions
+```
+
+This structure organizes source code under `src/`, separates build outputs in `dist/`, and places configuration, documentation, and static assets at the root of the repository.
+Utilize the wiki: https://deepwiki.com/minipuft/mediaFlow/1-overview
+for a deeper understanding.

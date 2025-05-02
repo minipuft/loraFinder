@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion } from 'framer-motion';
 import React, {
   CSSProperties,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -39,10 +40,11 @@ import {
 } from '../utils/layoutCalculator';
 import WorkerPool, { WorkerType } from '../workers/workerPool';
 import AuraBackground from './AuraBackground';
-import { ImageHoverData } from './ImageItem.js';
-import ImageRow from './ImageRow.js';
-import ImageSkeleton from './ImageSkeleton.js';
-import { BannerView, CarouselView, MasonryView } from './views';
+import ErrorBoundary from './ErrorBoundary';
+import { ImageHoverData } from './ImageItem';
+import ImageRow from './ImageRow';
+import { LazyBannerView, LazyCarouselView, LazyMasonryView } from './lazy/lazyWidgets';
+import Spinner from './lazy/Spinner';
 
 // Simple throttle function
 function throttle<F extends (...args: any[]) => any>(func: F, limit: number) {
@@ -150,13 +152,20 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   viewMode,
   scrollContainerRef,
 }) => {
+  // --- EARLY EXIT if folderPath is invalid --- >
+  if (!folderPath || typeof folderPath !== 'string' || folderPath.trim() === '') {
+    console.warn('[ImageFeed] Render skipped: Invalid folderPath received.');
+    // Optionally render a placeholder or null, or a specific message
+    // Render null for now, parent component should handle loading state
+    return null;
+  }
+
   console.log('[ImageFeed] Render - isGrouped prop:', isGrouped);
   const {
     data: originalImages,
-    isLoading: isLoadingImages,
+    //isLoading: isLoadingImages, // No longer returned by useSuspenseQuery
     isError,
     error,
-    isPlaceholderData,
   } = useFolderImages(folderPath);
 
   const windowSize = useWindowSize();
@@ -481,7 +490,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
 
   // --- Effect for Pre-fetching Placeholder Colors (Now safe to use getImageUrl) --- >
   useEffect(() => {
-    if (images && images.length > 0 && !isLoadingImages) {
+    if (images && images.length > 0 /* && !isLoadingImages <- No longer available */) {
       const initialImageCount = Math.min(images.length, 30);
       console.log(`[ImageFeed] Pre-fetching colors for initial ${initialImageCount} images...`);
 
@@ -505,10 +514,18 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
               { priority: 2 }
             )
             .then(result => {
-              // ... (update map)
+              if (result?.color) {
+                // Check if color exists and is non-null/empty string
+                setDominantColorMap(prevMap =>
+                  new Map(prevMap).set(result.id, result.color as string)
+                );
+              }
             })
             .catch(error => {
-              // ... (log error)
+              console.error(
+                `[ImageFeed] Color worker request failed for initial image ID ${imageInfo.id}:`,
+                error
+              );
             })
             .finally(() => {
               requestedColorIds.current.delete(imageInfo.id);
@@ -516,7 +533,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
         }
       }
     }
-  }, [images, isLoadingImages, workerPool, getImageUrl]); // Keep getImageUrl in deps
+  }, [images, workerPool, getImageUrl]); // Keep getImageUrl in deps
 
   // ---> Define Worker Fetch Logic OUTSIDE Effects for reusability <----
   const fetchAndUpdateGroupedLayout = useCallback(async () => {
@@ -541,7 +558,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       const groupingResult = await workerPool.postRequest<
         GroupingRequestPayload,
         { groupedImages: ImageGroup[] }
-      >('grouping', 'groupImages', { images, isGrouped }, { priority: 9 });
+      >('grouping', 'groupImages', { images, isGrouped: debouncedIsGrouped }, { priority: 9 }); // Use debounced value
       // ----> State Update 1: Grouped Images
       setProcessedGroupedImages(groupingResult.groupedImages);
       setIsGrouping(false); // Grouping data fetch complete
@@ -583,7 +600,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     // Note: activeRequestRef might need more granular handling if errors occur mid-pipeline
   }, [
     images,
-    isGrouped,
+    debouncedIsGrouped, // Use debounced value
     containerWidth,
     zoom,
     viewMode,
@@ -868,7 +885,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
                 id: imageInfo.id,
                 src: imageUrl,
               },
-              { priority: 1 }
+              { priority: 1 } // Higher priority for visible items
             )
             .then(result => {
               // Check result and specifically if color is a non-null string
@@ -973,8 +990,8 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     const { gapSize } = layoutMetrics;
     if (!containerWidth) return null;
 
-    const showLoadingState =
-      isLoadingImages || isGrouping || (viewMode === ViewMode.GRID && isLayoutCalculating);
+    // Determine loading state based on worker activity *after* initial data is available
+    const showLoadingState = isGrouping || (viewMode === ViewMode.GRID && isLayoutCalculating);
 
     // --- Render Fake Card Pile during Loading --- >
     if (showLoadingState) {
@@ -988,33 +1005,30 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       );
     }
 
-    // --- Render Dynamic Skeletons during Loading --- >
+    // --- Render Dynamic Skeletons during Loading (REMOVED - This was a fallback for the old isLoadingImages state) --- >
+    /*
     if (showLoadingState && viewMode === ViewMode.GRID) {
+      // ... skeleton rendering based on dominantColorMap ...
+    }
+    */
+
+    // Handle API errors after suspense resolves
+    if (isError) {
       return (
-        <div
-          className={styles.gridContainer} // Use a container for skeleton layout
-          style={{
-            gap: `${gapSize}px`,
-            // Basic grid layout for skeletons based on current column count
-            // Note: This won't perfectly match the final layout worker result,
-            // but provides a reasonable placeholder structure.
-            display: 'grid',
-            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-            padding: gapSize / 2, // Optional padding similar to final layout
-          }}
-        >
-          {(images ?? []).map(image => {
-            if (!image || image.width <= 0 || image.height <= 0) return null; // Skip invalid images
-            const color = dominantColorMap.get(image.id);
-            return (
-              <ImageSkeleton
-                key={`skeleton-${image.id}`}
-                containerWidth={image.width} // Use actual image dimensions
-                containerHeight={image.height}
-                placeholderColor={color} // Pass fetched color
-              />
-            );
-          })}
+        <div className={`${styles.container} ${styles.error}`}>
+          Error loading images: {error?.message || 'Unknown error'}
+        </div>
+      );
+    }
+
+    // Handle case where data resolves but is empty
+    const hasNoImages = !images || images.length === 0;
+    if (hasNoImages) {
+      return (
+        <div className={styles.container}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.noImages}>
+            No images found for this folder.
+          </motion.div>
         </div>
       );
     }
@@ -1024,25 +1038,31 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       let ViewComponent;
       switch (viewMode) {
         case ViewMode.MASONRY:
-          ViewComponent = MasonryView;
+          ViewComponent = LazyMasonryView;
           break;
         case ViewMode.BANNER:
-          ViewComponent = BannerView;
+          ViewComponent = LazyBannerView;
           break;
         case ViewMode.CAROUSEL:
-          ViewComponent = CarouselView;
+          ViewComponent = LazyCarouselView;
           break;
         default:
           return null;
       }
-      // Ensure non-grid views also receive potentially filtered images
-      return <ViewComponent images={images} zoom={zoom} />;
+      return (
+        <ErrorBoundary fallback={<div>Failed to load view.</div>}>
+          <Suspense fallback={<Spinner />}>
+            {' '}
+            {/* Suspense for lazy view component */}
+            <ViewComponent images={images} zoom={zoom} />
+          </Suspense>
+        </ErrorBoundary>
+      );
     }
 
     // --- Render Final Virtualized GRID View --- >
-    // Only render if *not* in loading state and rows are calculated
-    if (calculatedRows.length > 0) {
-      // Render grid even if loading (rows might be ready before images)
+    // Only render if *not* in worker loading state and rows are calculated for GRID view
+    if (viewMode === ViewMode.GRID && calculatedRows.length > 0) {
       return (
         <div // Outer container: Sets the total scrollable height
           style={{
@@ -1112,9 +1132,13 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       );
     }
 
-    // Fallback if still loading but not caught above, or rows aren't ready
-    // Can render a simpler spinner or nothing
-    return null; // Or a loading indicator
+    // Fallback if still loading but not caught above, or rows aren't ready for GRID
+    // This might indicate worker calculations are still pending for grid view
+    if (viewMode === ViewMode.GRID) {
+      return <div className={styles.loadingFallback}>Calculating layout...</div>;
+    }
+
+    return null; // Should be covered by other view modes or error states
   };
 
   // Lightbox configuration
@@ -1132,27 +1156,8 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     }));
   }, [lightboxImages, getImageUrl]);
 
-  // --- Render Logic --- > Restored Error/Empty/Main return
-  if (isError) {
-    return (
-      <div ref={feedRef} className={`${styles.container} ${styles.error}`}>
-        Error loading images: {error?.message || 'Unknown error'}
-      </div>
-    );
-  }
-
-  const hasNoImages = !isLoadingImages && (!images || images.length === 0);
-  if (hasNoImages && !isGrouping && !isLayoutCalculating) {
-    return (
-      <div ref={feedRef} className={styles.container}>
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={styles.noImages}>
-          No images found for this folder.
-        </motion.div>
-      </div>
-    );
-  }
-
-  // Main component return
+  // --- Main Component Return Structure --- >
+  // Error and No Images handled inside renderContent now, after suspense resolves
   return (
     <div
       ref={feedRef}
@@ -1173,6 +1178,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       />
     </div>
   );
-}; // Correct closing brace for the component function
+};
 
 export default React.memo(ImageFeed);

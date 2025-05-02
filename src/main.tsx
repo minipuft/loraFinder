@@ -2,9 +2,11 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.js';
+import { AnimationControllerProvider } from './contexts/AnimationControllerContext';
+import { ColorProvider } from './contexts/ColorContext';
 import { ImageProcessingProvider } from './contexts/ImageProcessingContext';
 import { queryClient } from './lib/queryClient';
+import AppRouter from './routes/AppRouter';
 import './styles/globals.scss';
 
 // Add Service Worker registration
@@ -24,9 +26,13 @@ if ('serviceWorker' in navigator) {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ImageProcessingProvider>
-        <App />
-      </ImageProcessingProvider>
+      <AnimationControllerProvider>
+        <ColorProvider>
+          <ImageProcessingProvider>
+            <AppRouter />
+          </ImageProcessingProvider>
+        </ColorProvider>
+      </AnimationControllerProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   </React.StrictMode>

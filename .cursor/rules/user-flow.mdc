@@ -1,6 +1,6 @@
 ---
 description: This document describes typical user journeys through the MediaFlow application.
-globs: 
+globs:
 alwaysApply: false
 ---
 # User Flow
