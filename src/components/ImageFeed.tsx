@@ -189,12 +189,15 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const OVERSCAN_MAX = 15;
   const EMA_ALPHA = 0.2;
   const OVERSCAN_FACTOR = 10;
+  const PREFETCH_LOOKAHEAD_FACTOR = 15; // Items per unit of velocity (needs tuning)
+  const MAX_PREFETCH_ITEMS = 20; // Max number of items to prefetch in one go
   const [dynamicOverscan, setDynamicOverscan] = useState(OVERSCAN_BASE);
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
   const { publishImageUpdate } = useImageProcessing();
   const [animatedRowIndices, setAnimatedRowIndices] = useState<Set<number>>(new Set());
   const previousIsGrouped = usePrevious(isGrouped);
   const exitResolverRef = useRef<(() => void) | null>(null);
+  const [prefetchTargetRange, setPrefetchTargetRange] = useState<[number, number] | null>(null);
 
   // Reset animated rows when folder changes
   useEffect(() => {
@@ -280,13 +283,11 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     // and windowSize for viewport changes.
   }, [containerWidth, windowSize]);
 
-  // --- Initialize Prefetch Manager ---
-  // Only initialize if we have images and the necessary layout data
+  // --- Initialize (Refactored) Prefetch Manager ---
   usePrefetchManager({
-    scrollContainerRef,
-    imageList: images, // Use the filtered images
-    layoutData: layoutDataMap,
-    // We can add configuration options here later (lookaheadDistance, concurrency)
+    imageList: images, // Pass the current list of images
+    prefetchTargetRange: prefetchTargetRange, // Pass the calculated range state
+    // concurrency: 5, // Optional: Adjust concurrency if needed
   });
 
   // --- Debouncing Logic for isGrouped ---
@@ -712,44 +713,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     [processedGroupedImages]
   );
 
-  // --- Scroll Velocity and Dynamic Overscan --- >
-  const lastScrollTopRef = useRef(0);
-  const lastScrollTimeRef = useRef(performance.now());
-
-  const handleScroll = useCallback(() => {
-    const scrollElement = scrollContainerRef.current;
-    if (!scrollElement) return;
-
-    const now = performance.now();
-    const scrollTop = scrollElement.scrollTop;
-    const timeDelta = now - lastScrollTimeRef.current;
-    const scrollDelta = scrollTop - lastScrollTopRef.current;
-
-    if (timeDelta > 10) {
-      const velocity = Math.abs(scrollDelta) / timeDelta;
-      velocityEMARef.current = EMA_ALPHA * velocity + (1 - EMA_ALPHA) * velocityEMARef.current;
-      const calculatedOverscan =
-        OVERSCAN_BASE +
-        Math.min(velocityEMARef.current * OVERSCAN_FACTOR, OVERSCAN_MAX - OVERSCAN_BASE);
-      setDynamicOverscan(Math.round(calculatedOverscan));
-      lastScrollTopRef.current = scrollTop;
-      lastScrollTimeRef.current = now;
-      debouncedSaveScroll(folderPath, scrollTop);
-    }
-  }, [scrollContainerRef, folderPath, debouncedSaveScroll]);
-
-  // Attach scroll listener
-  useEffect(() => {
-    const scrollElement = scrollContainerRef.current;
-    if (scrollElement) {
-      // Use throttle for the scroll handler to limit frequency
-      const throttledScrollHandler = throttle(handleScroll, 100); // Throttle to ~10fps
-      scrollElement.addEventListener('scroll', throttledScrollHandler);
-      return () => scrollElement.removeEventListener('scroll', throttledScrollHandler);
-    }
-  }, [scrollContainerRef, handleScroll]);
-  // --- End Scroll Velocity Logic --- >
-
   // --- Virtualization Setup ---
   const rowVirtualizer = useVirtualizer({
     count: calculatedRows.length,
@@ -764,6 +727,111 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     overscan: dynamicOverscan,
   });
 
+  // --- End Virtualization Setup ---
+
+  // --- Scroll Velocity and Dynamic Overscan / Prefetch ---
+  const lastScrollTopRef = useRef(0);
+  const lastScrollTimeRef = useRef(performance.now());
+
+  // ---> MOVE handleScroll definition AFTER rowVirtualizer definition
+  const handleScroll = useCallback(() => {
+    const scrollElement = scrollContainerRef.current;
+    // Check for rowVirtualizer *inside* the handler where it's used
+    if (!scrollElement) return;
+
+    const now = performance.now();
+    const scrollTop = scrollElement.scrollTop;
+    const timeDelta = now - lastScrollTimeRef.current;
+    const scrollDelta = scrollTop - lastScrollTopRef.current;
+
+    if (timeDelta > 10) {
+      const velocity = Math.abs(scrollDelta) / timeDelta;
+      velocityEMARef.current = EMA_ALPHA * velocity + (1 - EMA_ALPHA) * velocityEMARef.current;
+
+      // Dynamic Overscan Calculation (existing)
+      const calculatedOverscan =
+        OVERSCAN_BASE +
+        Math.min(velocityEMARef.current * OVERSCAN_FACTOR, OVERSCAN_MAX - OVERSCAN_BASE);
+      setDynamicOverscan(Math.round(calculatedOverscan));
+
+      // Add Prefetch Range Calculation
+      // Check rowVirtualizer here - now it should be defined in this scope
+      if (!rowVirtualizer) {
+        setPrefetchTargetRange(null);
+      } else {
+        const virtualItems = rowVirtualizer.getVirtualItems();
+        const totalItemCount = calculatedRows.length;
+
+        if (virtualItems.length > 0 && totalItemCount > 0) {
+          const firstVisibleIndex = virtualItems[0].index;
+          const lastVisibleIndex = virtualItems[virtualItems.length - 1].index;
+
+          const prefetchCount = Math.min(
+            Math.max(0, Math.round(velocityEMARef.current * PREFETCH_LOOKAHEAD_FACTOR)),
+            MAX_PREFETCH_ITEMS
+          );
+
+          let startIndex = -1;
+          let endIndex = -1;
+
+          if (scrollDelta > 0 && prefetchCount > 0) {
+            // Scrolling Down
+            startIndex = lastVisibleIndex + 1;
+            endIndex = startIndex + prefetchCount - 1;
+          } else if (scrollDelta < 0 && prefetchCount > 0) {
+            // Scrolling Up
+            endIndex = firstVisibleIndex - 1;
+            startIndex = endIndex - prefetchCount + 1;
+          }
+
+          // Clamp and validate the range
+          startIndex = Math.max(0, startIndex);
+          endIndex = Math.min(totalItemCount - 1, endIndex);
+
+          if (startIndex <= endIndex) {
+            setPrefetchTargetRange(prevRange => {
+              if (!prevRange || prevRange[0] !== startIndex || prevRange[1] !== endIndex) {
+                return [startIndex, endIndex];
+              }
+              return prevRange;
+            });
+          } else {
+            setPrefetchTargetRange(prevRange => (prevRange === null ? null : null));
+          }
+        } else {
+          setPrefetchTargetRange(prevRange => (prevRange === null ? null : null));
+        }
+      }
+
+      lastScrollTopRef.current = scrollTop;
+      lastScrollTimeRef.current = now;
+      debouncedSaveScroll(folderPath, scrollTop);
+    }
+  }, [
+    scrollContainerRef,
+    folderPath,
+    debouncedSaveScroll,
+    rowVirtualizer, // rowVirtualizer is now defined before this callback
+    calculatedRows.length,
+    setDynamicOverscan,
+    setPrefetchTargetRange,
+  ]);
+  // <--- End handleScroll definition move
+
+  // Attach scroll listener
+  useEffect(() => {
+    const scrollElement = scrollContainerRef.current;
+    if (scrollElement) {
+      // Use throttle for the scroll handler to limit frequency
+      const throttledScrollHandler = throttle(handleScroll, 100); // Throttle to ~10fps
+      scrollElement.addEventListener('scroll', throttledScrollHandler);
+      return () => scrollElement.removeEventListener('scroll', throttledScrollHandler);
+    }
+    // ---> Make sure handleScroll dependency is correctly handled
+  }, [scrollContainerRef, handleScroll]);
+  // --- End Scroll Velocity Logic Section (now contains handleScroll) ---
+
+  // --- Virtualization Measurement & Items (Moved up) ---
   // Remeasure rows whenever zoom, containerWidth, row count, row height fallback, gap size, view mode, or grouping changes
   useLayoutEffect(() => {
     rowVirtualizer.measure?.();
@@ -792,13 +860,11 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     });
 
     if (newlyVisibleIndices.size > 0) {
-      // Add newly visible rows to the set so they don't re-animate on scroll
       setAnimatedRowIndices(prev => new Set([...prev, ...newlyVisibleIndices]));
     }
-    // Dependency: virtualItems changes when scroll/layout happens
   }, [virtualItems, animatedRowIndices]);
 
-  // --- End Virtualization Setup ---
+  // --- End Virtualization Measurement ---
 
   // --- Add Scroll Restoration Effect ---
   useLayoutEffect(() => {
