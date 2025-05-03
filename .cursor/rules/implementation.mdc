@@ -11,7 +11,7 @@ alwaysApply: false
 - **Build Tool:** Vite is used for both client and server builds, enabling features like Hot Module Replacement (HMR) during development and optimized bundles for production. Vite also facilitates Server-Side Rendering (SSR).
 - **Language:** TypeScript is used across the entire project (frontend and backend) for type safety and improved developer experience.
 - **Styling:** SCSS Modules are used for component-scoped styles, complemented by Tailwind CSS for utility classes and rapid prototyping.
-- **State Management:** React Query handles server state, caching, and synchronization. Client-side UI state is managed within components using React hooks (`useState`, `useReducer`) or potentially shared via Context API (`src/contexts/`).
+- **State Management & Prefetch Optimization:** React Query handles server state. For scroll-prefetch, `usePrefetchManager` (in `src/hooks/usePrefetchManager.ts`) now accepts `layoutDataMap` and `feedCenter`, using a fixed-size max-heap (`src/utils/MaxHeap.ts`) and a distance-based priority function (`src/utils/priorityCalculator.ts`) to efficiently select offscreen images closest to the viewport. Client-side UI state is managed within components using React hooks (`useState`, `useReducer`) or potentially shared via Context API (`src/contexts/`).
 - **API Communication:** The frontend communicates with the backend Express API using `axios` (or native `fetch`), likely managed through abstractions in `src/api/` and integrated with React Query.
 - **Server:** The Express server (`server.ts`) handles:
   - Serving API endpoints under `/api`.
@@ -41,6 +41,9 @@ alwaysApply: false
     2. Framer Motion's `<AnimatePresence>` and `exit` variants in `ImageRow` handle ungrouping, smoothly flying cards back to the grid before removal.
     3. A unified effect in `ImageFeed` defers React state updates until after the GSAP animation on grouping, or immediately on ungrouping, ensuring continuous 60fps flow.
   - Components should be wrapped in `<AnimatePresence exitBeforeEnter>` and use `layout` props on motion elements for automatic layout transitions.
+  - **Drag & Drop:**
+    - Logic (drag start, over, end events; item reordering) is handled by `@dnd-kit/core` and `@dnd-kit/sortable`, primarily configured within `src/contexts/DragContext.tsx`.
+    - Visuals (smooth layout shifts, drag state appearance, drop indicators) are enhanced using Framer Motion (`motion.div`, `layout` prop, `variants`) within `src/components/ImageItem.tsx`, with animation definitions in `src/animations/dragReorderAnimations.ts`.
 - **Dependencies:** Keep dependencies up-to-date. Use `npm install` for adding dependencies. Validate dependencies using `npm run validate:deps`.
 - **Security:** Sanitize user inputs, validate data using libraries like Zod, be mindful of file system access permissions, and avoid exposing sensitive information.
 

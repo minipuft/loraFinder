@@ -35,6 +35,7 @@ This document outlines the core features of the MediaFlow application.
 - **React Query:** Manages server state, caching, and background updates efficiently on the client.
 - **Code Splitting:** Vite likely handles automatic code splitting for optimized JavaScript loading.
 - **Web Workers:** Potential use of web workers (`src/workers/`) for offloading intensive tasks (e.g., client-side processing if implemented).
+- **Scroll Prefetch Optimization:** The `usePrefetchManager` hook (`src/hooks/usePrefetchManager.ts`) now uses a fixed-size max-heap (`src/utils/MaxHeap.ts`) with a distance-based priority calculation (`src/utils/priorityCalculator.ts`) to efficiently select and prefetch offscreen images based on proximity to the viewport.
 
 ## 5. Development & Tooling
 
@@ -52,6 +53,11 @@ This document outlines the core features of the MediaFlow application.
 - **Integration with UI:** Components use `useAnimationController` to trigger animations on lifecycle events or interactions.
 - **Performance Considerations:** Animations are managed off the main thread where possible and throttled/debounced to avoid layout thrashing.
 - **Grouping & Ungrouping Animations:** Implements a hybrid approach combining GSAP (`src/animations/GroupingAnimator.ts`) for piling cards into a deck and Framer Motion's `<AnimatePresence>` exit variants in `src/components/ImageRow.tsx` for spreading them back into the grid, coordinated by the unified effect in `src/components/ImageFeed.tsx`.
+- **Enhanced Drag & Drop (Image Feed):**
+  - Utilizes `@dnd-kit` for robust drag-and-drop logic.
+  - Integrates Framer Motion for smooth, animated item reordering (`layout` prop).
+  - Provides clear visual feedback via item scaling/shadow variants during drag.
+  - Displays contextual drop indicators ('before'/'after') for precise placement.
 
 ## Edge Cases & Business Rules
 

@@ -1,5 +1,7 @@
+import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion } from 'framer-motion';
+import { throttle as lodashThrottle } from 'lodash';
 import React, {
   CSSProperties,
   Suspense,
@@ -22,15 +24,18 @@ import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 import { GroupingAnimator } from '../animations/GroupingAnimator';
 import { ColorContext } from '../contexts/ColorContext';
+import { DragProvider } from '../contexts/DragContext';
 import { useImageProcessing } from '../contexts/ImageProcessingContext';
 import { useFolderImages } from '../hooks/query/useFolderImages';
-import { usePrefetchManager } from '../hooks/usePrefetchManager.js';
+import { useImageOrderManager } from '../hooks/useImageDragDrop';
+import { usePrefetchManager } from '../hooks/usePrefetchManager';
 import usePrevious from '../hooks/usePrevious';
-import useWindowSize from '../hooks/useWindowSize.js';
+import useWindowSize from '../hooks/useWindowSize';
 import { loadScrollState, saveScrollState, ScrollState } from '../lib/cache/feedStateCache';
 import styles from '../styles/ImageFeed.module.scss';
 import { ImageInfo, ViewMode } from '../types/index.js';
 import AnimationUtils from '../utils/AnimationUtils';
+import { Rect } from '../utils/intersectionUtils';
 import {
   calculateGapSize,
   calculateLayout,
@@ -45,27 +50,6 @@ import { ImageHoverData } from './ImageItem';
 import ImageRow from './ImageRow';
 import { LazyBannerView, LazyCarouselView, LazyMasonryView } from './lazy/lazyWidgets';
 import Spinner from './lazy/Spinner';
-
-// Simple throttle function
-function throttle<F extends (...args: any[]) => any>(func: F, limit: number) {
-  let inThrottle: boolean;
-  let lastResult: ReturnType<F>;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const throttled = function (this: ThisParameterType<F>, ...args: Parameters<F>): void {
-    const context = this;
-    if (!inThrottle) {
-      inThrottle = true;
-      setTimeout(() => (inThrottle = false), limit);
-      // Call the function but don't worry about returning its result for listener
-      func.apply(context, args);
-    }
-    // Explicitly return void for listener compatibility
-    // return lastResult; // Removed potentially problematic return
-  };
-
-  return throttled;
-}
 
 // Simple debounce function (with cancel)
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
@@ -87,6 +71,29 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
   };
 
   return debounced as F & { cancel: () => void };
+}
+
+// Add this custom hook for debounced memo operations
+// This helps prevent excessive calculations during frequent state changes like dragging
+function useDebouncedMemo<T>(factory: () => T, deps: React.DependencyList, delay: number = 200): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(factory());
+  const previousValueRef = useRef<T>(debouncedValue);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      const newValue = factory();
+      previousValueRef.current = newValue;
+      setDebouncedValue(newValue);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, delay]);
+
+  // Return the immediate value for first render, but debounced value for subsequent ones
+  return debouncedValue;
 }
 
 // Define the props interface for ImageFeed component
@@ -144,6 +151,13 @@ interface ColorWorkerSuccessPayload {
   color: string | null;
 }
 
+// Define interface for potential drop target
+interface PotentialDropTarget {
+  targetId: string;
+  position: 'before' | 'after';
+  rowIndex?: number;
+}
+
 // Define the ImageFeed component
 const ImageFeed: React.FC<ImageFeedProps> = ({
   folderPath,
@@ -161,12 +175,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   }
 
   console.log('[ImageFeed] Render - isGrouped prop:', isGrouped);
-  const {
-    data: originalImages,
-    //isLoading: isLoadingImages, // No longer returned by useSuspenseQuery
-    isError,
-    error,
-  } = useFolderImages(folderPath);
+  const { data: originalImages, isError, error } = useFolderImages(folderPath);
 
   const windowSize = useWindowSize();
   const feedRef = useRef<HTMLDivElement>(null);
@@ -183,6 +192,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const [restoredState, setRestoredState] = useState<ScrollState | null>(null);
   const previousFolderPathRef = useRef<string | null>(null);
   const rowHeightsRef = useRef<number[]>([]);
+  const rowRectsMapRef = useRef<Map<number, Rect>>(new Map());
   const isRestoringScrollRef = useRef(false);
   const velocityEMARef = useRef(0);
   const OVERSCAN_BASE = 3;
@@ -198,6 +208,26 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const previousIsGrouped = usePrevious(isGrouped);
   const exitResolverRef = useRef<(() => void) | null>(null);
   const [prefetchTargetRange, setPrefetchTargetRange] = useState<[number, number] | null>(null);
+  const [calculatedRows, setCalculatedRows] = useState<RowConfig[]>([]);
+  const [isLayoutCalculating, setIsLayoutCalculating] = useState(false);
+  const [processedGroupedImages, setProcessedGroupedImages] = useState<ImageGroup[]>([]);
+  const [isGrouping, setIsGrouping] = useState(false);
+  const activeRequestRef = useRef<{ [key in WorkerType]?: boolean }>({});
+
+  // Refs for previous layout state comparison
+  const prevContainerWidthRef = useRef<number>(containerWidth);
+  const prevZoomRef = useRef<number>(zoom);
+  const prevOrderedImageIdsRef = useRef<string[]>([]);
+  const prevDebouncedIsGroupedRef = useRef<boolean>(isGrouped);
+
+  // Configure sensors for drag detection
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px of movement required before activation
+      },
+    })
+  );
 
   // Reset animated rows when folder changes
   useEffect(() => {
@@ -216,9 +246,10 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   // --- Memoized Images & Failed Image Handling --- >
   const images = useMemo(() => {
     if (!originalImages) return [];
-    return originalImages.filter(img => img && !failedImageIds.has(img.id)); // Added check for img existence
+    return originalImages.filter(img => img && !failedImageIds.has(img.id));
   }, [originalImages, failedImageIds]);
 
+  // Restore handleImageLoadError here
   const handleImageLoadError = useCallback((imageId: string) => {
     setFailedImageIds(prev => {
       if (prev.has(imageId)) return prev;
@@ -227,47 +258,66 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       newSet.add(imageId);
       return newSet;
     });
-  }, []);
+  }, []); // <-- Add setFailedImageIds dependency if lint complains later
 
   // --- Worker Pool --- >
   const workerPool = useMemo(() => WorkerPool.getInstance(), []);
 
-  // --- State for Worker Operations --- >
-  const [calculatedRows, setCalculatedRows] = useState<RowConfig[]>([]);
-  const [isLayoutCalculating, setIsLayoutCalculating] = useState(false);
-  const [processedGroupedImages, setProcessedGroupedImages] = useState<ImageGroup[]>([]);
-  const [isGrouping, setIsGrouping] = useState(false);
-  // Flag to track if an async operation is currently active for a worker type
-  const activeRequestRef = useRef<{ [key in WorkerType]?: boolean }>({});
-
-  // --- Layout Data Map --- >
+  // --- Layout Data Map and Row Rects Calculation ---
   const layoutDataMap = useMemo(() => {
     const map = new Map<string, { top: number; left: number; width: number; height: number }>();
+    const rowRectsMap = new Map<number, Rect>(); // Create map for this calculation cycle
     let currentTop = 0;
     const gap = calculateGapSize(zoom);
-    // Ensure calculatedRows exists and has items before iterating
+
     if (calculatedRows && calculatedRows.length > 0) {
-      calculatedRows.forEach(row => {
+      calculatedRows.forEach((row, rowIndex) => {
         let currentLeft = 0;
+        let minRowTop = currentTop;
+        let maxRowBottom = currentTop + row.height;
+        let minRowLeft = Infinity;
+        let maxRowRight = 0;
+
         row.images.forEach((img, index) => {
           if (!row.imageWidths || row.imageWidths.length <= index) {
             console.warn(`[ImageFeed] Missing imageWidths for image ${img.id} in row.`);
             return; // Skip this image if width data is missing
           }
           const width = row.imageWidths[index];
-          map.set(img.id, {
-            top: currentTop, // Store viewport-relative top
-            left: currentLeft, // Store viewport-relative left
+          const itemLayout = {
+            top: currentTop,
+            left: currentLeft,
             width: width,
             height: row.height,
-          });
+          };
+          map.set(img.id, itemLayout);
+
+          // Update row bounds
+          minRowLeft = Math.min(minRowLeft, currentLeft);
+          maxRowRight = Math.max(maxRowRight, currentLeft + width);
+
           currentLeft += width + gap;
         });
+
+        // Store the calculated rectangle for the entire row
+        if (row.images.length > 0) {
+          // Only add if row has items
+          rowRectsMap.set(rowIndex, {
+            top: minRowTop,
+            left: minRowLeft,
+            width: maxRowRight - minRowLeft, // Calculate width from bounds
+            height: row.height,
+          });
+        }
+
         currentTop += row.height + gap;
       });
     }
+    console.log('[ImageFeed] layoutDataMap created, size:', map.size);
+    // Update the ref with the newly calculated row rects
+    rowRectsMapRef.current = rowRectsMap;
     return map;
-  }, [calculatedRows, zoom]); // Keep dependencies simple: recalculate if rows or zoom change
+  }, [calculatedRows, zoom]); // Keep dependencies simple
 
   // --- Feed Center Calculation ---
   // Calculate the center of the feed area based on its client rect.
@@ -284,10 +334,12 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   }, [containerWidth, windowSize]);
 
   // --- Initialize (Refactored) Prefetch Manager ---
-  usePrefetchManager({
-    imageList: images, // Pass the current list of images
-    prefetchTargetRange: prefetchTargetRange, // Pass the calculated range state
-    // concurrency: 5, // Optional: Adjust concurrency if needed
+  const { findNearbyItems } = usePrefetchManager({
+    imageList: images,
+    layoutDataMap,
+    feedCenter,
+    prefetchTargetRange,
+    containerWidth,
   });
 
   // --- Debouncing Logic for isGrouped ---
@@ -406,7 +458,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       zoom,
       viewMode,
       isGrouped: debouncedIsGrouped,
-      // Include estimated height as it affects the worker call
       targetRowHeight: layoutMetrics.estimatedRowHeightFallback,
     }),
     [
@@ -536,166 +587,174 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     }
   }, [images, workerPool, getImageUrl]); // Keep getImageUrl in deps
 
-  // ---> Define Worker Fetch Logic OUTSIDE Effects for reusability <----
-  const fetchAndUpdateGroupedLayout = useCallback(async () => {
-    // Keep this check here: only run if necessary
-    if (!images || images.length === 0 || containerWidth <= 0) {
-      console.log('[ImageFeed] Skipping data fetch (no images or zero width).');
-      setProcessedGroupedImages([]);
-      setCalculatedRows([]);
-      setIsGrouping(false);
-      setIsLayoutCalculating(false);
-      return;
-    }
+  // --- Initialize Virtualizer --- >
+  const rowVirtualizer = useVirtualizer({
+    count: calculatedRows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: useCallback(
+      (index: number) => {
+        const rowHeight = calculatedRows[index]?.height ?? layoutMetrics.estimatedRowHeightFallback;
+        return rowHeight + layoutMetrics.gapSize;
+      },
+      [calculatedRows, layoutMetrics.estimatedRowHeightFallback, layoutMetrics.gapSize]
+    ),
+    overscan: dynamicOverscan,
+  });
 
-    setIsGrouping(true); // Indicate start of data fetching
-    if (viewMode === ViewMode.GRID) setIsLayoutCalculating(true);
-    activeRequestRef.current = {};
-    workerPool.cancelAllPendingTasks(); // Cancel previous attempts
+  // --- Define Core Functions with useCallback --- >
 
-    try {
-      console.log('[ImageFeed] Fetching grouped/layout data...');
-      // 1. Grouping Worker
-      const groupingResult = await workerPool.postRequest<
-        GroupingRequestPayload,
-        { groupedImages: ImageGroup[] }
-      >('grouping', 'groupImages', { images, isGrouped: debouncedIsGrouped }, { priority: 9 }); // Use debounced value
-      // ----> State Update 1: Grouped Images
-      setProcessedGroupedImages(groupingResult.groupedImages);
-      setIsGrouping(false); // Grouping data fetch complete
+  // Define fetchAndUpdateGroupedLayout (check dependencies carefully)
+  const fetchAndUpdateGroupedLayout = useCallback(
+    async (currentOrderedImages: ImageInfo[]) => {
+      // Dependencies used inside: containerWidth, viewMode, debouncedIsGrouped, workerPool, zoom, layoutMetrics.estimatedRowHeightFallback
+      // State setters are stable: setProcessedGroupedImages, setCalculatedRows, setIsGrouping, setIsLayoutCalculating
+      if (!currentOrderedImages || currentOrderedImages.length === 0 || containerWidth <= 0) {
+        console.log('[ImageFeed] Skipping data fetch (no images or zero width).');
+        setProcessedGroupedImages([]);
+        setCalculatedRows([]);
+        setIsGrouping(false);
+        setIsLayoutCalculating(false);
+        return;
+      }
 
-      // 2. Layout Worker (if needed)
-      if (viewMode === ViewMode.GRID) {
-        const firstImages = groupingResult.groupedImages
-          .map(g => g.images[0])
-          .filter(img => img && img.width > 0 && img.height > 0);
-        if (firstImages.length > 0 && containerWidth > 0) {
-          const layoutResult = await workerPool.postRequest<LayoutRequestPayload, RowConfig[]>(
-            'layout',
-            'calculateLayout',
-            {
-              images: firstImages,
-              containerWidth,
-              zoom,
-              targetRowHeight: layoutMetrics.estimatedRowHeightFallback,
-            },
-            { priority: 10 }
-          );
-          // ----> State Update 2: Calculated Rows
-          setCalculatedRows(layoutResult);
+      setIsGrouping(true);
+      if (viewMode === ViewMode.GRID) setIsLayoutCalculating(true);
+      activeRequestRef.current = {};
+      workerPool.cancelAllPendingTasks();
+
+      try {
+        // Grouping depends on currentOrderedImages and debouncedIsGrouped
+        const groupingResult = await workerPool.postRequest<
+          GroupingRequestPayload,
+          { groupedImages: ImageGroup[] }
+        >(
+          'grouping',
+          'groupImages',
+          { images: currentOrderedImages, isGrouped: debouncedIsGrouped },
+          { priority: 9 }
+        );
+        setProcessedGroupedImages(groupingResult.groupedImages);
+        setIsGrouping(false);
+
+        // Layout depends on groupingResult, containerWidth, zoom, layoutMetrics.estimatedRowHeightFallback
+        if (viewMode === ViewMode.GRID) {
+          const firstImages = groupingResult.groupedImages
+            .map(g => g.images[0])
+            .filter(img => img && img.width > 0 && img.height > 0);
+          if (firstImages.length > 0 && containerWidth > 0) {
+            const layoutResult = await workerPool.postRequest<LayoutRequestPayload, RowConfig[]>(
+              'layout',
+              'calculateLayout',
+              {
+                images: firstImages,
+                containerWidth,
+                zoom,
+                targetRowHeight: layoutMetrics.estimatedRowHeightFallback,
+              },
+              { priority: 10 }
+            );
+            setCalculatedRows(layoutResult);
+          } else {
+            setCalculatedRows([]);
+          }
+          setIsLayoutCalculating(false);
         } else {
           setCalculatedRows([]);
+          setIsLayoutCalculating(false);
         }
-        setIsLayoutCalculating(false); // Layout data fetch complete
-      } else {
+      } catch (error) {
+        console.error('[ImageFeed] Error fetching grouped/layout data:', error);
+        setProcessedGroupedImages([]);
         setCalculatedRows([]);
+        setIsGrouping(false);
         setIsLayoutCalculating(false);
       }
-    } catch (error) {
-      console.error('[ImageFeed] Error fetching grouped/layout data:', error);
-      setProcessedGroupedImages([]);
-      setCalculatedRows([]);
-      setIsGrouping(false);
-      setIsLayoutCalculating(false);
+    },
+    [
+      // List only the actual dependencies that affect the function's logic
+      containerWidth, // Width change requires layout
+      zoom, // Zoom change requires layout
+      debouncedIsGrouped, // Grouping change requires grouping worker call
+      viewMode, // Switching viewMode affects if layout worker is called
+      layoutMetrics.estimatedRowHeightFallback, // Input to layout worker
+      workerPool, // Stable reference from useMemo
+      // State setters are stable, exclude them
+      // currentOrderedImages is passed as an argument, so not needed in deps array
+    ]
+  );
+
+  // Define handleOrderChange (depends on rowVirtualizer and needs orderedImages)
+  const handleOrderChangeCallback = useCallback(() => {
+    console.log('[ImageFeed] Order changed callback, measure virtualizer...');
+    // The actual fetch is triggered by the useEffect watching orderedImages
+    rowVirtualizer?.measure();
+  }, [rowVirtualizer]);
+
+  // Instantiate the Order Manager Hook
+  const { orderedImages, customImageOrder, setCustomImageOrder, resetImageOrder } =
+    useImageOrderManager({
+      initialImages: images,
+      folderPath,
+      onOrderChange: handleOrderChangeCallback, // Pass the stable callback
+    });
+
+  // Effect to run fetch when order changes OR other layout inputs change significantly
+  useEffect(() => {
+    if (viewMode !== ViewMode.GRID) return;
+
+    // --- Redo comparison logic inside effect ---
+    const currentWidth = containerWidth;
+    const currentZoom = zoom;
+    const currentImageIds = orderedImages.map(img => img.id);
+    const currentIsGrouped = debouncedIsGrouped;
+
+    const widthChangedSignificantly = Math.abs(currentWidth - prevContainerWidthRef.current) > 8;
+    const zoomChangedSignificantly = Math.abs(currentZoom - prevZoomRef.current) > 0.01;
+    const groupingChanged = currentIsGrouped !== prevDebouncedIsGroupedRef.current;
+    const orderChanged =
+      currentImageIds.length !== prevOrderedImageIdsRef.current.length ||
+      currentImageIds.some((id, index) => id !== prevOrderedImageIdsRef.current[index]);
+    const isInitialCalculation = calculatedRows.length === 0 && orderedImages.length > 0;
+
+    // Define the condition for recalculating
+    const shouldRecalculate =
+      isInitialCalculation ||
+      widthChangedSignificantly ||
+      zoomChangedSignificantly ||
+      groupingChanged ||
+      orderChanged;
+
+    console.log('[ImageFeed Layout Effect]', {
+      /* ... logging object ... */
+    });
+
+    // --- Use the actual condition --- >
+    if (shouldRecalculate) {
+      console.log(
+        '[ImageFeed Layout Effect] Conditions met, calling fetchAndUpdateGroupedLayout...'
+      );
+      // Pass the current orderedImages from the hook
+      fetchAndUpdateGroupedLayout(orderedImages);
+
+      // --- Update Refs --- >
+      prevContainerWidthRef.current = currentWidth;
+      prevZoomRef.current = currentZoom;
+      prevOrderedImageIdsRef.current = currentImageIds;
+      prevDebouncedIsGroupedRef.current = currentIsGrouped;
+    } else {
+      console.log('[ImageFeed Layout Effect] Conditions not met, skipping layout calculation.');
     }
-    // Note: activeRequestRef might need more granular handling if errors occur mid-pipeline
   }, [
-    images,
-    debouncedIsGrouped, // Use debounced value
     containerWidth,
     zoom,
+    orderedImages, // Effect depends on orderedImages
+    debouncedIsGrouped,
     viewMode,
-    layoutMetrics.estimatedRowHeightFallback,
-    workerPool,
-    // Include setters to satisfy exhaustive-deps, though they are stable
-    setProcessedGroupedImages,
-    setCalculatedRows,
-    setIsGrouping,
-    setIsLayoutCalculating,
+    fetchAndUpdateGroupedLayout, // fetch function ref is a dependency
+    calculatedRows.length,
   ]);
 
-  // ---> UNIFIED Effect for Transitions AND Data Fetching <---
-  useEffect(() => {
-    const handleLayoutOrGroupChange = async () => {
-      const isTransition = isGrouped !== previousIsGrouped;
-      console.log(
-        `[ImageFeed] Layout/Group Effect: isGrouped=${isGrouped}, previous=${previousIsGrouped}, isTransition=${isTransition}`
-      );
-
-      let animationRan = false;
-      let exitPromise: Promise<void> | null = null;
-
-      // Grouping transition (GSAP)
-      if (
-        isTransition &&
-        isGrouped &&
-        viewMode === ViewMode.GRID &&
-        groupingAnimatorRef.current &&
-        feedRef.current
-      ) {
-        const cards = Array.from(
-          feedRef.current.querySelectorAll(`.${styles.imageWrapper}.card`)
-        ) as HTMLElement[];
-        console.log(`[ImageFeed] Grouping Transition: Found ${cards.length} cards.`);
-        if (cards.length > 0) {
-          try {
-            console.log('[ImageFeed] Awaiting group animation...');
-            await groupingAnimatorRef.current.group(cards, feedCenter);
-            console.log('[ImageFeed] Group animation complete.');
-            animationRan = true;
-          } catch (animError) {
-            console.error('[ImageFeed] Group animation failed:', animError);
-          }
-        } else {
-          console.log('[ImageFeed] Skipping group animation: no cards found.');
-        }
-      }
-      // Ungrouping transition: create exit promise for Framer Motion
-      else if (isTransition && !isGrouped) {
-        console.log('[ImageFeed] Ungroup transition detected. Waiting for exit animation...');
-        exitPromise = new Promise<void>(resolve => {
-          exitResolverRef.current = resolve;
-        });
-      } else if (isTransition) {
-        console.log(
-          '[ImageFeed] Transition detected, but skipping GSAP animation (not grid view or refs missing).'
-        );
-      }
-
-      // Await exit if ungrouped
-      if (exitPromise) {
-        console.log('[ImageFeed] Awaiting exit complete from ImageRow...');
-        await exitPromise;
-        console.log('[ImageFeed] Exit animation complete.');
-        exitResolverRef.current = null;
-      }
-
-      // Always fetch and update layout data after animation or immediately
-      console.log('[ImageFeed] Proceeding to fetch/update layout data...');
-      await fetchAndUpdateGroupedLayout();
-      console.log('[ImageFeed] Data fetch/update complete.');
-    };
-
-    handleLayoutOrGroupChange();
-
-    // Dependencies: Include previousIsGrouped to ensure comparison is accurate on change.
-  }, [layoutInputs, fetchAndUpdateGroupedLayout, previousIsGrouped, feedCenter, viewMode]); // Key dependencies
-
-  // Define the useEffect that updates rowHeightsRef HERE, AFTER calculatedRows state
-  useEffect(() => {
-    if (viewMode === ViewMode.GRID && calculatedRows && calculatedRows.length > 0) {
-      rowHeightsRef.current = calculatedRows.map(row => row.height);
-    } else {
-      rowHeightsRef.current = [];
-    }
-  }, [calculatedRows, viewMode, folderPath]);
-
-  // Handle image overflow (wrapped in useCallback)
-  const handleImageOverflow = useCallback((image: ImageInfo) => {
-    console.warn('Image overflow detected:', image.id);
-  }, []);
-
-  // Update handleImageClick to work with grouped images and set lightbox plugins (wrapped in useCallback)
+  // Define handleImageClick (needs processedGroupedImages)
   const handleImageClick = useCallback(
     (clickedImage: ImageInfo) => {
       const groupIndex = processedGroupedImages.findIndex(group =>
@@ -710,33 +769,17 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
         }
       }
     },
-    [processedGroupedImages]
+    [processedGroupedImages] // Dependency
   );
 
-  // --- Virtualization Setup ---
-  const rowVirtualizer = useVirtualizer({
-    count: calculatedRows.length,
-    getScrollElement: () => scrollContainerRef.current,
-    estimateSize: useCallback(
-      (index: number) => {
-        const rowHeight = calculatedRows[index]?.height ?? layoutMetrics.estimatedRowHeightFallback;
-        return rowHeight + layoutMetrics.gapSize;
-      },
-      [calculatedRows, layoutMetrics.estimatedRowHeightFallback, layoutMetrics.gapSize]
-    ),
-    overscan: dynamicOverscan,
-  });
+  // --- Effects --- >
 
-  // --- End Virtualization Setup ---
-
-  // --- Scroll Velocity and Dynamic Overscan / Prefetch ---
+  // --- Scroll Logic --- >
   const lastScrollTopRef = useRef(0);
   const lastScrollTimeRef = useRef(performance.now());
 
-  // ---> MOVE handleScroll definition AFTER rowVirtualizer definition
   const handleScroll = useCallback(() => {
     const scrollElement = scrollContainerRef.current;
-    // Check for rowVirtualizer *inside* the handler where it's used
     if (!scrollElement) return;
 
     const now = performance.now();
@@ -755,7 +798,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       setDynamicOverscan(Math.round(calculatedOverscan));
 
       // Add Prefetch Range Calculation
-      // Check rowVirtualizer here - now it should be defined in this scope
       if (!rowVirtualizer) {
         setPrefetchTargetRange(null);
       } else {
@@ -811,28 +853,23 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     scrollContainerRef,
     folderPath,
     debouncedSaveScroll,
-    rowVirtualizer, // rowVirtualizer is now defined before this callback
+    rowVirtualizer,
     calculatedRows.length,
     setDynamicOverscan,
     setPrefetchTargetRange,
   ]);
-  // <--- End handleScroll definition move
 
-  // Attach scroll listener
   useEffect(() => {
     const scrollElement = scrollContainerRef.current;
     if (scrollElement) {
-      // Use throttle for the scroll handler to limit frequency
-      const throttledScrollHandler = throttle(handleScroll, 100); // Throttle to ~10fps
+      // Use lodashThrottle for the scroll handler
+      const throttledScrollHandler = lodashThrottle(handleScroll, 100); // Throttle to ~10fps
       scrollElement.addEventListener('scroll', throttledScrollHandler);
       return () => scrollElement.removeEventListener('scroll', throttledScrollHandler);
     }
-    // ---> Make sure handleScroll dependency is correctly handled
   }, [scrollContainerRef, handleScroll]);
-  // --- End Scroll Velocity Logic Section (now contains handleScroll) ---
 
-  // --- Virtualization Measurement & Items (Moved up) ---
-  // Remeasure rows whenever zoom, containerWidth, row count, row height fallback, gap size, view mode, or grouping changes
+  // --- Virtualization Measurement & Items --- >
   useLayoutEffect(() => {
     rowVirtualizer.measure?.();
   }, [
@@ -847,7 +884,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     rowVirtualizer,
   ]);
 
-  // Get the virtual items to render
   const virtualItems = rowVirtualizer.getVirtualItems();
 
   // Track animated rows
@@ -920,13 +956,9 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     };
   }, []); // Empty dependency array ensures this runs only on mount and unmount
 
-  // --- Color Extraction Worker Integration (Add Priority for visible items) --- >
+  // --- Color Extraction Worker Integration --- >
   useEffect(() => {
-    // Only run if we have virtual items and rows calculated
-    if (virtualItems.length === 0 || calculatedRows.length === 0 || images.length === 0) {
-      return;
-    }
-
+    if (virtualItems.length === 0 || calculatedRows.length === 0 || images.length === 0) return;
     const visibleImageIds = new Set<string>();
     virtualItems.forEach(virtualItem => {
       const row = calculatedRows[virtualItem.index];
@@ -1051,6 +1083,11 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     };
   }, []); // Empty dependency array ensures this runs only once on mount/unmount
 
+  // --- Define getRowRects function --- >
+  const getRowRects = useCallback(() => {
+    return rowRectsMapRef.current;
+  }, []); // No dependencies, just returns the current ref value
+
   // --- Render Logic --- >
   const renderContent = () => {
     const { gapSize } = layoutMetrics;
@@ -1127,17 +1164,16 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     }
 
     // --- Render Final Virtualized GRID View --- >
-    // Only render if *not* in worker loading state and rows are calculated for GRID view
     if (viewMode === ViewMode.GRID && calculatedRows.length > 0) {
       return (
-        <div // Outer container: Sets the total scrollable height
+        <div
           style={{
             height: `${rowVirtualizer.getTotalSize()}px`,
             width: '100%',
             position: 'relative',
           }}
         >
-          <div // Inner container: Absolutely positioned items are placed here
+          <div
             style={{
               width: '100%',
               position: 'relative',
@@ -1153,7 +1189,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
                 !animatedRowIndices.has(virtualItem.index);
 
               return (
-                <motion.div // Wrapper with animation
+                <motion.div
                   key={virtualItem.key}
                   layout
                   transition={{ type: 'spring', stiffness: 260, damping: 30 }}
@@ -1169,7 +1205,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
                   }}
                 >
                   <ImageRow
-                    // Pass necessary props down
                     images={row.images}
                     imageWidths={row.imageWidths ?? []}
                     onImageClick={handleImageClick}
@@ -1177,16 +1212,15 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
                     zoom={zoom}
                     isLastRow={virtualItem.index === calculatedRows.length - 1}
                     rowHeight={row.height}
-                    initialAnimateState={shouldAnimate ? 'initial' : 'animate'} // Pass state
-                    feedCenter={feedCenter} // Pass center coords
-                    layoutDataMap={layoutDataMap} // <-- Pass layoutDataMap down
+                    initialAnimateState={shouldAnimate ? 'initial' : 'animate'}
+                    feedCenter={feedCenter}
+                    layoutDataMap={layoutDataMap}
                     groupedImages={processedGroupedImages}
                     workerPool={workerPool}
                     gap={gapSize}
                     containerWidth={containerWidth}
                     onImageHover={handleImageHover}
                     onImageLoadError={handleImageLoadError}
-                    // Pass the color map down to ImageRow/ImageItem if needed
                     dominantColorMap={dominantColorMap}
                     onExitComplete={() => exitResolverRef.current && exitResolverRef.current()}
                   />
@@ -1222,6 +1256,15 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
     }));
   }, [lightboxImages, getImageUrl]);
 
+  // Save original order for reference (if needed later)
+  useEffect(() => {
+    // If customImageOrder is being initialized, store the original order
+    if (!customImageOrder && images.length > 0) {
+      // We now store by folder path so no need for a separate storage
+      console.log('[ImageFeed] Original image order available if needed for reset');
+    }
+  }, [customImageOrder, images]);
+
   // --- Main Component Return Structure --- >
   // Error and No Images handled inside renderContent now, after suspense resolves
   return (
@@ -1233,7 +1276,28 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       }}
     >
       <AuraBackground />
-      <div className={styles.feed}>{renderContent()}</div>
+      <div className={styles.feed}>
+        <DragProvider
+          initialImages={images}
+          currentOrder={customImageOrder}
+          onOrderChange={setCustomImageOrder}
+          getRowRects={getRowRects}
+          rows={calculatedRows.map((row, index) => ({ id: index, images: row.images }))}
+        >
+          {customImageOrder && (
+            <div className="absolute top-4 right-4 z-50">
+              <button
+                onClick={resetImageOrder}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded shadow-lg transition-colors"
+                title="Reset to original image order"
+              >
+                Reset Order
+              </button>
+            </div>
+          )}
+          {renderContent()}
+        </DragProvider>
+      </div>
 
       <Lightbox
         open={lightboxIndex !== -1}

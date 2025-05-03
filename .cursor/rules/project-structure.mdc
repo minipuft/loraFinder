@@ -24,7 +24,7 @@ https://deepwiki.com/minipuft/mediaFlow/1-overview
 ├── public/                # Static files served by Express
 ├── Scripts/               # Custom utility scripts
 ├── src/                   # Application source code
-│   ├── animations/        # Animation pipeline and controllers
+│   ├── animations/        # Framer Motion variants & animation logic
 │   ├── api/               # Frontend API client modules (React Query hooks)
 │   ├── components/        # Reusable React components
 │   │   └── views/         # Page-level view components
@@ -42,7 +42,10 @@ https://deepwiki.com/minipuft/mediaFlow/1-overview
 │   ├── styles/            # Global and SCSS module styles
 │   ├── types/             # TypeScript type definitions
 │   ├── utils/             # Utility functions (e.g., webgl helpers)
-│   │   └── webgl/
+│   │   ├── index.ts           # Barrel file exporting utilities
+│   │   ├── MaxHeap.ts         # Generic fixed-size max-heap utility
+│   │   ├── priorityCalculator.ts # Distance-based priority calculation
+│   │   └── webgl/            # WebGL helper utilities
 │   └── workers/           # Web Worker source code
 ├── system_prompts/        # Internal system prompt templates for AI assistant
 ├── index.html             # Base HTML template for SSR

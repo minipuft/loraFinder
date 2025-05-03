@@ -16,6 +16,7 @@ To provide a fast, efficient, and visually appealing web application for managin
 - **Advanced Search:** Enable users to find specific images using full-text search across metadata or filenames.
 - **Robust Backend:** Utilize a stable Express backend for reliable file system interaction and image processing.
 - **Developer Experience:** Maintain a clean, well-structured codebase using Vite, TypeScript, and modern React practices.
+- **Adaptive Scroll Prefetching:** Proactively prefetch images near the viewport using the `usePrefetchManager` hook with priority-based selection for smoother scrolling experiences.
 - **Dynamic Animations:** Provide context-driven animations for page transitions, interactions, and scroll-based effects using a GSAP-powered animation pipeline.
 
 ## 3. High-Level Explanation

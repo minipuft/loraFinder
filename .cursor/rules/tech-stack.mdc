@@ -25,7 +25,9 @@ alwaysApply: true
 
 ## Animations
 - **Framer Motion** ^11.5.4
+  - *Used for UI element animations, layout transitions, and drag/drop visual enhancements.*
 - **GSAP** ^3.12.5
+  - *Used for complex timeline-based animations, potentially grouped animations or scroll effects.*
 
 ## Utilities & Communication
 - **Comlink** ^4.4.2 (Web Worker RPC)

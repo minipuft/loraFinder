@@ -26,7 +26,8 @@ _(Note: This is a placeholder document. Actual timelines and milestones need to 
   - **Sub-task:** Create `imageResource` utility for per-image loading.
   - **Sub-task:** Create `SuspenseImage` component.
   - **Sub-task:** Implement per-image `Suspense` boundary in `ImageItem`.
-- **Milestone 2.4:** Performance optimizations (verify code splitting, lazy loading).
+- **Milestone 2.4:** Performance optimizations (verify code splitting, lazy loading, implement scroll prefetch optimization using `usePrefetchManager` hook).
+  - **Sub-task:** Introduce `usePrefetchManager` (in `src/hooks/usePrefetchManager.ts`) with a fixed-size max-heap (`src/utils/MaxHeap.ts`) and distance-based priority calculation (`src/utils/priorityCalculator.ts`) to efficiently prefetch offscreen images based on viewport proximity.
 - **Milestone 2.5:** Refine search functionality.
 - **Milestone 2.6:** Implement file uploads.
 

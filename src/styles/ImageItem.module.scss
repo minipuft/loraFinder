@@ -246,3 +246,165 @@
   font-weight: bold;
   z-index: 3;
 }
+
+.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+  cursor: grabbing;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+  transition:
+    transform 0.15s ease-out,
+    opacity 0.15s ease-out;
+}
+
+.isDropTarget {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  z-index: 20;
+  transition:
+    outline 0.2s ease-out,
+    transform 0.2s ease-out;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: inherit;
+  }
+
+  // Add subtle scale effect to highlight the target
+  transform: scale(1.02);
+}
+
+.dropBefore,
+.dropAfter {
+  position: relative;
+}
+
+.dropIndicator {
+  position: absolute;
+  z-index: 10;
+  border-radius: 2px;
+
+  &[data-position='before'] {
+    left: -2px;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(59, 130, 246, 1) 0%, rgba(59, 130, 246, 0.7) 100%);
+    box-shadow:
+      0 0 8px rgba(59, 130, 246, 0.6),
+      0 0 4px rgba(59, 130, 246, 0.3);
+    animation: pulseIndicator 1.5s infinite;
+  }
+
+  &[data-position='after'] {
+    right: -2px;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.7) 0%, rgba(59, 130, 246, 1) 100%);
+    box-shadow:
+      0 0 8px rgba(59, 130, 246, 0.6),
+      0 0 4px rgba(59, 130, 246, 0.3);
+    animation: pulseIndicator 1.5s infinite;
+  }
+}
+
+.imageItemInner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.smooth {
+  transition: transform 0.2s ease-out;
+}
+
+@keyframes pulseIndicator {
+  0%,
+  100% {
+    opacity: 0.8;
+    box-shadow:
+      0 0 8px rgba(59, 130, 246, 0.6),
+      0 0 4px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 12px rgba(59, 130, 246, 0.8),
+      0 0 6px rgba(59, 130, 246, 0.5);
+  }
+}
+
+// For accessibility - reduce motion
+@media (prefers-reduced-motion: reduce) {
+  .dropIndicator {
+    animation: none;
+    opacity: 1;
+  }
+
+  .isDragging,
+  .smooth {
+    transition: none;
+  }
+}
+
+.isDragging {
+  // Styles previously here might be handled by Framer variants now
+  cursor: grabbing;
+}
+
+.isDropTarget {
+  // Subtle indication that this item is a potential drop zone
+  // Example: slightly brighter background or outline
+  // outline: 2px solid rgba(59, 130, 246, 0.5); // Example: blue outline
+  // background-color: rgba(255, 255, 255, 0.05); // Example: slight overlay
+}
+
+// --- Add Indicator Styles ---
+
+.dropIndicatorBase {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px; // Width of the indicator line
+  background-color: #3b82f6; // Blue indicator color (Tailwind blue-500)
+  z-index: 15; // Ensure it's above the item content but potentially below dragged item
+  border-radius: 2px;
+  box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+  pointer-events: none; // Don't interfere with drag events
+}
+
+// Style for the element rendered when dropping before
+.dropIndicatorBefore {
+  @extend .dropIndicatorBase;
+  left: -6px; // Position slightly to the left of the item
+}
+
+// Style for the element rendered when dropping after
+.dropIndicatorAfter {
+  @extend .dropIndicatorBase;
+  right: -6px; // Position slightly to the right of the item
+}
+
+// Note: The .dropBefore and .dropAfter classes on the item itself might not be needed
+// if we rely solely on rendering the .dropIndicatorBefore/.dropIndicatorAfter elements.
+// Keeping them for now in case specific item-level styling is desired.
+.dropBefore {
+  // Example: could add a slight border if needed
+  // border-left: 3px solid rgba(59, 130, 246, 0.7);
+}
+
+.dropAfter {
+  // Example:
+  // border-right: 3px solid rgba(59, 130, 246, 0.7);
+}

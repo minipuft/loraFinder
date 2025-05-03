@@ -1,6 +1,6 @@
 ---
 description: Requirements for Project Installation
-globs: 
+globs:
 alwaysApply: false
 ---
 # Requirements
@@ -26,6 +26,9 @@ alwaysApply: false
 - **Express** ^4.19.2
 - **@tanstack/react-query** & **React** 18.x
 - **axios**, **dotenv**, **sharp**, **formidable**, **uuid**, **p-queue**
+- **workers** (Web Workers) for offloading client-side tasks
+- **Custom Hook `usePrefetchManager`** for efficient scroll-based image prefetch
+- **Utilities `MaxHeap` & `priorityCalculator`** for on-viewport priority selection
 
 ## Environment Variables
 - **MAIN_DIRECTORY**: Root path of image directory to serve

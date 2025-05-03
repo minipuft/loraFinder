@@ -1,7 +1,7 @@
 import { ImageInfo, ViewMode } from '../types/index.js';
 
 // Constants
-export const MIN_IMAGE_WIDTH = 200;
+export const MIN_IMAGE_WIDTH = 150;
 export const MAX_COLUMNS = 7;
 export const MIN_COLUMNS = 1;
 export const BASE_GAP = 4;
@@ -257,14 +257,13 @@ export const distributeImages = (
     return [];
   }
 
-  const sortedImages = getSortedImages(images);
   const gap = calculateGapSize(zoom);
   const rows: RowConfig[] = [];
   let currentRow: ImageInfo[] = [];
   let currentRowAspectRatio = 0;
 
-  for (let i = 0; i < sortedImages.length; i++) {
-    const testRow = [...currentRow, sortedImages[i]];
+  for (let i = 0; i < images.length; i++) {
+    const testRow = [...currentRow, images[i]];
     const { fits, idealHeight, predictedWidths } = checkRowFit(testRow, containerWidth, zoom, gap);
 
     if (!fits && currentRow.length > 0) {
@@ -303,12 +302,12 @@ export const distributeImages = (
       // --- End finalize current row ---
 
       // Start new row with current image
-      currentRow = [sortedImages[i]];
-      currentRowAspectRatio = getAspectRatio(sortedImages[i]);
+      currentRow = [images[i]];
+      currentRowAspectRatio = getAspectRatio(images[i]);
     } else {
       // Add image to current row
       currentRow = testRow;
-      currentRowAspectRatio += getAspectRatio(sortedImages[i]);
+      currentRowAspectRatio += getAspectRatio(images[i]);
     }
   }
 
@@ -518,4 +517,27 @@ export const maintainAspectRatio = (
   }
 
   return { width: Math.round(width), height: Math.round(height) };
+};
+
+// Add this function
+export const reorderImagesById = (images: ImageInfo[], orderIds: string[] | null): ImageInfo[] => {
+  if (!orderIds || !images.length) return images;
+
+  // Create a map for quick lookup
+  const imageMap = new Map(images.map(img => [img.id, img]));
+  const result: ImageInfo[] = [];
+
+  // First add ordered images
+  orderIds.forEach(id => {
+    const img = imageMap.get(id);
+    if (img) {
+      result.push(img);
+      imageMap.delete(id);
+    }
+  });
+
+  // Add remaining images
+  imageMap.forEach(img => result.push(img));
+
+  return result;
 };

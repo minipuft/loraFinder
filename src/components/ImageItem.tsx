@@ -1,5 +1,8 @@
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'framer-motion';
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { dragItemVariants } from '../animations/dragReorderAnimations';
 import { ProcessedImageUpdate, useImageProcessing } from '../contexts/ImageProcessingContext';
 import styles from '../styles/ImageItem.module.scss';
 import { ImageInfo } from '../types/index.js';
@@ -32,11 +35,14 @@ interface ImageItemProps {
   onResize?: (width: number, height: number) => void;
   width: number;
   height: number;
-  isCarousel: boolean;
-  groupImages: ImageInfo[];
+  isCarousel?: boolean;
+  groupImages?: ImageInfo[];
   onImageHover: (data: ImageHoverData) => void;
   onImageLoadError: (imageId: string) => void;
-  dominantColor?: string | null; // Added optional prop for color from worker
+  dominantColor?: string | null;
+  activeId?: string | null;
+  isDropTarget?: boolean;
+  dropPosition?: 'before' | 'after' | null;
 }
 
 const ImageItem: React.FC<ImageItemProps> = ({
@@ -46,19 +52,33 @@ const ImageItem: React.FC<ImageItemProps> = ({
   containerHeight,
   zoom = 1,
   groupCount,
-  onResize,
   width,
   height,
   isCarousel = false,
-  groupImages = [],
   onImageHover,
   onImageLoadError,
   dominantColor,
+  activeId,
+  isDropTarget = false,
+  dropPosition = null,
 }) => {
   const imageRef = useRef<HTMLImageElement>(null);
   const [processedUrls, setProcessedUrls] = useState<{ low?: string; high?: string }>({});
   const [hasError, setHasError] = useState(false);
   const { subscribeToImageUpdates } = useImageProcessing();
+
+  const isCurrentlyDragging = activeId === image.id;
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
+    id: image.id,
+    disabled: isCarousel,
+  });
+
+  const sortableStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    position: 'relative',
+    touchAction: 'none',
+  };
 
   const placeholderColor = useMemo(() => {
     return dominantColor || '#333';
@@ -76,12 +96,6 @@ const ImageItem: React.FC<ImageItemProps> = ({
     }
     return '1 / 1';
   }, [image.width, image.height, targetWidth, targetHeight]);
-
-  useEffect(() => {
-    if (onResize) {
-      onResize(targetWidth, targetHeight);
-    }
-  }, [targetWidth, targetHeight, onResize]);
 
   const handleMouseEnter = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
@@ -177,50 +191,67 @@ const ImageItem: React.FC<ImageItemProps> = ({
     );
   }
 
+  const itemClassName = `
+    ${styles.imageItem}
+    ${isDragging ? styles.isDragging : ''}
+    ${isDropTarget ? styles.isDropTarget : ''}
+    ${isDropTarget && dropPosition === 'before' ? styles.dropBefore : ''}
+    ${isDropTarget && dropPosition === 'after' ? styles.dropAfter : ''}
+  `;
+
   return (
     <motion.div
-      className={styles.imageItemContainer}
-      layout
+      ref={setNodeRef}
+      className={itemClassName}
       style={{
         width: targetWidth,
         height: targetHeight,
-        maxWidth: '100%',
         aspectRatio: aspectRatio,
-        position: 'relative',
+        backgroundColor: placeholderColor,
+        ...sortableStyle,
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
-      role="button"
-      tabIndex={0}
-      aria-label={image.title || 'Image'}
+      {...attributes}
+      {...listeners}
+      layout
+      variants={dragItemVariants}
+      animate={isDragging ? 'dragging' : 'initial'}
     >
-      <ErrorBoundary
-        fallback={<div className={`${styles.imageItem} ${styles.imageError}`}>Error</div>}
-      >
-        <Suspense
-          fallback={
-            <ImageSkeleton
-              containerWidth={targetWidth}
-              containerHeight={targetHeight}
-              placeholderColor={placeholderColor}
+      {isDropTarget && dropPosition === 'before' && (
+        <div className={styles.dropIndicatorBefore} data-position="before"></div>
+      )}
+      {isDropTarget && dropPosition === 'after' && (
+        <div className={styles.dropIndicatorAfter} data-position="after"></div>
+      )}
+
+      <div className={styles.imageItemInner} onClick={handleClick}>
+        <ErrorBoundary fallback={<div className={styles.imageError}>Error</div>}>
+          <Suspense
+            fallback={
+              <ImageSkeleton
+                containerWidth={targetWidth}
+                containerHeight={targetHeight}
+                placeholderColor={placeholderColor}
+              />
+            }
+          >
+            <SuspenseImage
+              src={imageUrl}
+              alt={image.alt || 'Image'}
+              className={`${styles.image} ${styles.smooth}`}
+              onError={handleImageError}
+              width={targetWidth}
+              height={targetHeight}
+              loading="lazy"
             />
-          }
-        >
-          <SuspenseImage
-            key={imageUrl}
-            src={imageUrl}
-            alt={image.alt || image.title || ''}
-            className={styles.imageItemImage}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-            onError={handleImageError}
-          />
-        </Suspense>
-      </ErrorBoundary>
+          </Suspense>
+        </ErrorBoundary>
+      </div>
+
+      {groupCount && groupCount > 1 && !isCarousel && (
+        <div className={styles.groupCount}>+{groupCount}</div>
+      )}
     </motion.div>
   );
 };
