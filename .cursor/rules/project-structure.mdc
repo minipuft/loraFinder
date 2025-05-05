@@ -24,7 +24,14 @@ https://deepwiki.com/minipuft/mediaFlow/1-overview
 ├── public/                # Static files served by Express
 ├── Scripts/               # Custom utility scripts
 ├── src/                   # Application source code
-│   ├── animations/        # Framer Motion variants & animation logic
+│   ├── animations/        # Framer Motion & GSAP animation logic
+│   │   ├── presets/         # NEW: Animation preset definitions
+│   │   │   ├── dragDrop/      # NEW: Drag & Drop GSAP presets
+│   │   │   ├── uiEffects/     # NEW: General UI effect presets (GSAP & Framer)
+│   │   │   ├── index.ts       # NEW: Barrel file exporting combined presets
+│   │   │   └── types.ts       # NEW: Shared animation types
+│   │   ├── AnimationPipeline.ts # GSAP animation orchestrator
+│   │   └── MotionPreset.tsx     # (Currently Unused) Framer Motion preset wrapper
 │   ├── api/               # Frontend API client modules (React Query hooks)
 │   ├── components/        # Reusable React components
 │   │   └── views/         # Page-level view components

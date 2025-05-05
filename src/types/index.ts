@@ -109,3 +109,5 @@ export interface ImageProcessorWorkerAPI {
     // onProgress?: (processed: { id: string; lowResUrl?: string; highResUrl?: string }) => void;
   }): Promise<Array<{ id: string; lowResUrl?: string; highResUrl?: string }>>; // Return array of results
 }
+
+export * from './animations'; // Export types from animations.ts

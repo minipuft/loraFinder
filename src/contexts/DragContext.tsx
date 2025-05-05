@@ -11,35 +11,41 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { ImageInfo } from '../types'; // Assuming ImageInfo type path
-import { Rect } from '../utils/intersectionUtils';
+import { useAnimationPipeline } from '../animations/AnimationManager';
+import { ImageInfo } from '../types/index.js';
+import { Rect, findBestIntersectingRow } from '../utils/intersectionUtils';
 
-// Define the structure for potential drop targets
-export interface PotentialDropTarget {
+// Define the structure for potential drop targets (item-specific)
+export interface ItemDropTarget {
   targetId: string;
-  position: 'before' | 'after'; // This will now represent horizontal position
-  rowIndex: number; // Keep the row index
+  position: 'before' | 'after';
+}
+
+export interface RowInfo {
+  id: number | string; // Allow string IDs if needed
+  images: ImageInfo[];
 }
 
 // Define the shape of the context
-interface DragContextProps {
+export interface DragContextProps {
   activeId: UniqueIdentifier | null;
-  potentialDropTarget: PotentialDropTarget | null;
+  itemDropTarget: ItemDropTarget | null;
+  hoveredRowIndex: number | null;
   orderedImages: ImageInfo[];
-  setCustomImageOrder: (order: string[] | null) => void;
-  rows: { id: number; images: ImageInfo[] }[]; // Pass row structure
+  setCustomImageOrder: (orderedIds: string[]) => void;
+  rows: RowInfo[];
 }
 
 // Create the context
-export const DragContext = createContext<DragContextProps | undefined>(undefined);
+const DragContext = createContext<DragContextProps | undefined>(undefined);
 
 interface DragProviderProps {
   children: React.ReactNode;
-  initialImages: ImageInfo[]; // Pass initial images
-  currentOrder: string[] | null; // Pass current custom order
-  onOrderChange: (newOrder: string[] | null) => void; // Callback when order changes
+  initialImages: ImageInfo[];
+  currentOrder: string[] | null;
+  onOrderChange: (orderedIds: string[]) => void;
   getRowRects: () => Map<number, Rect>;
-  rows: { id: number; images: ImageInfo[] }[];
+  rows: RowInfo[];
 }
 
 // Provider component
@@ -52,7 +58,9 @@ export const DragProvider: React.FC<DragProviderProps> = ({
   rows,
 }) => {
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
-  const [potentialDropTarget, setPotentialDropTarget] = useState<PotentialDropTarget | null>(null);
+  const [itemDropTarget, setItemDropTarget] = useState<ItemDropTarget | null>(null);
+  const [hoveredRowIndex, setHoveredRowIndex] = useState<number | null>(null);
+  const globalPipeline = useAnimationPipeline('global');
 
   // Use memoized ordered images based on currentOrder or initialImages
   const orderedImages = useMemo(() => {
@@ -69,7 +77,6 @@ export const DragProvider: React.FC<DragProviderProps> = ({
         }
       });
 
-      // Add any images not in the saved order (e.g., newly added files)
       remainingImages.forEach(id => {
         const img = imageMap.get(id);
         if (img) {
@@ -77,8 +84,10 @@ export const DragProvider: React.FC<DragProviderProps> = ({
         }
       });
       return result;
+    } else {
+      // Fallback if currentOrder is null (e.g., initial load or reset)
+      return initialImages;
     }
-    return initialImages; // Default to initial order if no custom order exists
   }, [initialImages, currentOrder]);
 
   // Map image IDs to their row index for quick lookup
@@ -104,106 +113,116 @@ export const DragProvider: React.FC<DragProviderProps> = ({
 
   // --- DndContext Handlers ---
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    console.log('[DragContext] Drag started:', event.active.id);
-    setActiveId(event.active.id);
-    setPotentialDropTarget(null); // Clear potential target on new drag
-  }, []);
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      console.log('[DragContext] Drag started:', event.active.id);
+      setActiveId(event.active.id);
+      setItemDropTarget(null);
+
+      // Trigger global animation on drag start
+      globalPipeline.addStep({ target: 'body', preset: 'dragStartGlow' }).play(); // Example preset
+    },
+    [globalPipeline] // Add pipeline dependency
+  );
 
   const handleDragOver = useCallback(
     (event: DragOverEvent) => {
       const { active, over } = event;
 
-      // Exit if not over anything or dragging over self
-      if (!over || active.id === over.id) {
-        if (potentialDropTarget) setPotentialDropTarget(null);
+      let currentHoveredRowIndex: number | null = null;
+      const activeRect = active?.rect?.current?.translated;
+
+      if (activeRect) {
+        const rowRects = getRowRects();
+        const rowRectsForUtil = new Map<string | number, Rect>(Array.from(rowRects.entries()));
+        const bestRowId = findBestIntersectingRow(activeRect, rowRectsForUtil, 0.1);
+
+        if (bestRowId !== null && typeof bestRowId === 'number') {
+          currentHoveredRowIndex = bestRowId;
+        }
+      }
+
+      if (hoveredRowIndex !== currentHoveredRowIndex) {
+        console.log('[DragContext] Hovered Row Index:', currentHoveredRowIndex);
+        setHoveredRowIndex(currentHoveredRowIndex);
+      }
+
+      let currentItemTarget: ItemDropTarget | null = null;
+      if (!over || !active || active.id === over.id) {
+        if (itemDropTarget) setItemDropTarget(null);
         return;
       }
 
-      const activeRect = active.rect.current.translated;
       const overRect = over.rect;
-
-      // Exit if rects aren't available
       if (!activeRect || !overRect) {
-        if (potentialDropTarget) setPotentialDropTarget(null);
+        if (itemDropTarget) setItemDropTarget(null);
         return;
       }
 
       const overItemId = over.id.toString();
-      const overItemRowIndex = imageIdToRowIndexMap.get(overItemId);
-
-      // Exit if we can't determine the row of the item being hovered over
-      if (overItemRowIndex === undefined) {
-        if (potentialDropTarget) setPotentialDropTarget(null);
-        return;
-      }
-
-      // --- Calculate HORIZONTAL position relative to the hovered item ---
       const targetId = overItemId;
-      const targetRowIndex = overItemRowIndex; // Row index of the item hovered over
-
-      // Calculate horizontal center of the dragged item
       const dragCenterX = activeRect.left + activeRect.width / 2;
-      // Calculate horizontal center of the item being hovered over
       const targetMiddleX = overRect.left + overRect.width / 2;
-
-      // Determine if pointer is before or after the horizontal midpoint
       const horizontalPosition = dragCenterX < targetMiddleX ? 'before' : 'after';
-      // --- End of horizontal calculation ---
 
-      // Construct the new potential target object
-      const newTarget: PotentialDropTarget = {
+      currentItemTarget = {
         targetId: targetId,
-        position: horizontalPosition, // Use the calculated horizontal position
-        rowIndex: targetRowIndex,
+        position: horizontalPosition,
       };
 
-      // Update state only if the target has actually changed
       if (
-        !potentialDropTarget ||
-        potentialDropTarget.targetId !== newTarget.targetId ||
-        potentialDropTarget.position !== newTarget.position ||
-        potentialDropTarget.rowIndex !== newTarget.rowIndex
+        !itemDropTarget ||
+        itemDropTarget.targetId !== currentItemTarget.targetId ||
+        itemDropTarget.position !== currentItemTarget.position
       ) {
-        console.log('[DragContext] Setting potential drop target:', newTarget);
-        setPotentialDropTarget(newTarget);
+        console.log('[DragContext] Setting Item Drop Target:', currentItemTarget);
+        setItemDropTarget(currentItemTarget);
       }
     },
-    [potentialDropTarget, imageIdToRowIndexMap] // Removed getRowRects as it's not used for horizontal check
+    [itemDropTarget, hoveredRowIndex, getRowRects] // Keep getRowRects dependency
   );
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-      // Store target info before clearing state
-      const finalTargetInfo = potentialDropTarget;
+      const finalItemTargetInfo = itemDropTarget;
 
       setActiveId(null);
-      setPotentialDropTarget(null);
+      setItemDropTarget(null);
+      setHoveredRowIndex(null);
+
+      // Trigger global animation on drag end
+      globalPipeline.addStep({ target: 'body', preset: 'dragEndFade' }).play(); // Example preset
 
       if (over && active.id !== over.id) {
         const oldIndex = orderedImages.findIndex(img => img.id === active.id);
-        // Determine the target index based on the item hovered over (over.id)
-        // and the final drop position ('before' or 'after')
         let newIndex = orderedImages.findIndex(img => img.id === over.id);
 
         if (oldIndex !== -1 && newIndex !== -1) {
-          // Adjust newIndex based on the final drop indicator position if needed
-          // This might already be handled correctly by arrayMove if it uses the visual target,
-          // but explicit adjustment could be safer depending on arrayMove's exact behavior.
-          // Example (if dropping 'after' the target item):
-          // if (finalTargetInfo?.position === 'after') {
-          //   newIndex = newIndex + 1; // Adjust index if necessary
-          // }
-          // Note: arrayMove might implicitly handle this based on visual order vs data order.
-          // Let's rely on arrayMove for now and adjust if testing shows issues.
+          // Simplified index calculation for arrayMove
+          if (finalItemTargetInfo?.position === 'after') {
+            // If dropping 'after' the target, the effective index for insertion is targetIndex + 1
+            // arrayMove might need adjustment based on whether moving forward or backward.
+            // Let's try the direct target index + 1 for 'after'
+            newIndex += 1;
+          }
+
+          // Ensure the target index is valid for arrayMove
+          const moveToIndex = Math.min(newIndex, orderedImages.length);
 
           console.log(
-            `[DragContext] Reordering ${active.id} relative to ${over.id}. OldIdx: ${oldIndex}, NewIdx: ${newIndex}. Final Drop Pos: ${finalTargetInfo?.position}`
+            `[DragContext] Reordering ${active.id}. OldIdx: ${oldIndex}, NewIdxTarget: ${moveToIndex}. DropPos: ${finalItemTargetInfo?.position}`
           );
 
-          const newOrderedIds = arrayMove(orderedImages, oldIndex, newIndex).map(img => img.id);
-          onOrderChange(newOrderedIds); // Update the order via callback
+          if (oldIndex !== moveToIndex) {
+            // Only move if index actually changes
+            const newOrderedIds = arrayMove(orderedImages, oldIndex, moveToIndex).map(
+              img => img.id
+            );
+            onOrderChange(newOrderedIds);
+          } else {
+            console.log('[DragContext] No index change needed.');
+          }
         } else {
           console.warn('[DragContext] Drag end: Active or Over index not found.');
         }
@@ -211,19 +230,20 @@ export const DragProvider: React.FC<DragProviderProps> = ({
         console.log('[DragContext] Drag canceled or no movement.');
       }
     },
-    [orderedImages, onOrderChange, potentialDropTarget] // Dependencies for handleDragEnd
+    [orderedImages, onOrderChange, itemDropTarget, globalPipeline] // Add pipeline dependency
   );
 
   // Provide context values (including rows)
   const contextValue: DragContextProps = useMemo(
     () => ({
       activeId,
-      potentialDropTarget, // Pass the updated potentialDropTarget state
+      itemDropTarget,
+      hoveredRowIndex,
       orderedImages,
-      setCustomImageOrder: onOrderChange, // Keep using the callback prop
+      setCustomImageOrder: onOrderChange,
       rows,
     }),
-    [activeId, potentialDropTarget, orderedImages, onOrderChange, rows]
+    [activeId, itemDropTarget, hoveredRowIndex, orderedImages, onOrderChange, rows]
   );
 
   // Prepare item IDs for SortableContext
@@ -233,10 +253,11 @@ export const DragProvider: React.FC<DragProviderProps> = ({
     <DragContext.Provider value={contextValue}>
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter} // Keep using closestCenter for finding the 'over' item
+        collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        // onDragCancel={handleDragCancel} // Consider adding drag cancel handling
       >
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           {children}
@@ -247,9 +268,9 @@ export const DragProvider: React.FC<DragProviderProps> = ({
 };
 
 // Custom hook to use the context
-export const useDragContext = () => {
+export const useDragContext = (): DragContextProps => {
   const context = useContext(DragContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useDragContext must be used within a DragProvider');
   }
   return context;

@@ -1,7 +1,7 @@
 import React, { createContext, ReactNode, useCallback, useMemo, useState } from 'react';
 
-// Define hover state structure
-interface HoverState {
+// Define hover state structure and EXPORT it
+export interface HoverState {
   isHovering: boolean;
   position: { x: number; y: number } | null; // Normalized coordinates [0, 1] relative to background
   color: string | null; // Optional: Dominant color of hovered item

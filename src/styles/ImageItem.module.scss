@@ -408,3 +408,27 @@
   // Example:
   // border-right: 3px solid rgba(59, 130, 246, 0.7);
 }
+
+.imageItem {
+  position: relative; // Ensure indicators can be positioned absolutely
+  overflow: hidden; // Keep content clipped
+  // ... other .imageItem styles
+}
+
+// --- Add Indicator Styles ---
+.indicatorBefore,
+.indicatorAfter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px; // Example width
+  background-color: rgba(59, 130, 246, 0.7); // Example color (Tailwind blue-500)
+  opacity: 0; // Initially hidden - controlled by AnimationPipeline
+  pointer-events: none; // Prevent interference with clicks/hovers
+  z-index: 5; // Ensure they appear above the image but below drag overlay maybe
+  // Optional: Add a subtle shadow or rounded corners
+  border-radius: 2px;
+  box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+  // transform: scaleX(0); // Alternative initial state if animating scale
+  // transform-origin: center; // Or left/right
+}

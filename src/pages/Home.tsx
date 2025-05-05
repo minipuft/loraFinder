@@ -1,28 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { useAnimationPipeline } from '../animations/AnimationManager';
 import Layout from '../components/Layout.js';
 import MainContent from '../components/MainContent.js';
+import { AppSettingsProvider } from '../contexts';
 import { useAnimationController } from '../contexts/AnimationControllerContext';
-import { useAnimationPipeline } from '../hooks/useAnimationPipeline';
-import { ViewMode } from '../types/index.js';
-import { getHomeDirectory } from '../utils/settings.js';
 
 /**
  * Home component - the main page of the application.
- * It manages the overall state and layout of the app.
- *
+ * It sets up the main layout and context provider.
  * @component
  * @returns {JSX.Element} The main application page.
  */
 const Home: React.FC = () => {
-  // State declarations for managing application data and UI
-  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
-    return getHomeDirectory() || '';
-  });
-  const [zoom, setZoom] = useState<number>(1);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isGrouped, setIsGrouped] = useState<boolean>(true);
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.GRID);
-
   // Refs
   const mainScrollRef = useRef<HTMLElement>(null);
   const layoutWrapperRef = useRef<HTMLDivElement>(null); // Ref for the outer wrapper div
@@ -31,135 +20,78 @@ const Home: React.FC = () => {
   const contentAreaRef = useRef<HTMLDivElement>(null); // Ref for MainContent wrapper area
 
   // --- Animation Setup ---
-  const homeEnterPipeline = useAnimationPipeline({ paused: true });
-  const { trigger } = useAnimationController(); // Keep trigger if needed elsewhere
+  const homeEnterPipeline = useAnimationPipeline('homePage');
+  const { trigger } = useAnimationController();
 
-  // Configure the entrance animation steps once (Existing Effect - Updated Structure)
+  // Configure the entrance animation steps once
   useEffect(() => {
     if (
+      homeEnterPipeline &&
       layoutWrapperRef.current &&
       sidebarRef.current &&
       navbarRef.current &&
       contentAreaRef.current
     ) {
+      homeEnterPipeline.clear();
+
       homeEnterPipeline
         .addStep({
           target: layoutWrapperRef.current,
           preset: 'fadeIn',
-          vars: { duration: 0.4 }, // Duration moved to vars
-          position: '+=0.1', // Delay moved to position
+          vars: { duration: 0.4 },
+          position: '+=0.1',
         })
         .addStep({
           target: sidebarRef.current,
           preset: 'fadeIn',
-          vars: { duration: 0.4 }, // Duration moved to vars
-          position: '+=0.2', // Delay moved to position
+          vars: { duration: 0.4 },
+          position: '+=0.2',
         })
         .addStep({
           target: navbarRef.current,
           preset: 'fadeIn',
-          vars: { duration: 0.4 }, // Duration moved to vars
-          position: '+=0.2', // Delay moved to position
+          vars: { duration: 0.4 },
+          position: '+=0.2',
         })
         .addStep({
           target: contentAreaRef.current,
           preset: 'fadeIn',
-          vars: { duration: 0.5 }, // Duration moved to vars
-          position: '+=0.3', // Delay moved to position
+          vars: { duration: 0.5 },
+          position: '+=0.3',
         });
-      // Play the animation immediately on mount now
-      homeEnterPipeline.play();
+
+      homeEnterPipeline.play().catch(error => {
+        console.error('[Home Page] Entrance animation failed:', error);
+      });
     }
-    // Cleanup on unmount
-    return () => {
-      homeEnterPipeline.kill();
-    };
-  }, [homeEnterPipeline]); // Depends only on the pipeline instance now
+  }, [homeEnterPipeline]);
 
-  /**
-   * Handler for folder selection change.
-   * Updates the selected folder state.
-   * @param {string} folder - The newly selected folder.
-   */
-  const handleFolderChange = (folder: string) => {
-    setSelectedFolder(folder);
-  };
+  // --- Trigger pageEnter Event on Mount ---
+  useEffect(() => {
+    console.log('[Home Page] Triggering pageEnter event.');
+    trigger('pageEnter');
+  }, [trigger]);
 
-  /**
-   * Handler for zoom level change.
-   * Updates the zoom state.
-   * @param {number} newZoom - The new zoom level.
-   */
-  const handleZoomChange = (newZoom: number) => {
-    setZoom(newZoom);
-  };
-
-  /**
-   * Handler for search query change.
-   * Updates the search query state.
-   * @param {string} query - The new search query.
-   */
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    // Search result display needs to be handled
-  };
-
-  /**
-   * Handler for file upload completion.
-   * Refreshes the images in the current folder.
-   * TODO: Replace with query invalidation using queryClient
-   */
-  const handleUploadComplete = () => {
-    // Example: queryClient.invalidateQueries(['images', selectedFolder]);
-    console.log('TODO: Invalidate query for folder:', selectedFolder);
-  };
-
-  /**
-   * Handler for grouping toggle.
-   * Toggles the grouping state.
-   */
-  const handleGroupToggle = () => {
-    setIsGrouped(prevState => !prevState);
-  };
-
-  const handleViewModeChange = (newMode: ViewMode) => {
-    setViewMode(newMode);
-  };
-
-  // Render the main layout with all necessary props
-  // Note: 'folders' & 'currentDirectory' props are removed from Layout
+  // Render the main layout with removed props
   return (
-    // Remove initial style - let it render normally
-    <div ref={layoutWrapperRef}>
-      <Layout
-        ref={layoutWrapperRef} // Pass ref even if not animating for now
-        selectedFolder={selectedFolder}
-        onFolderChange={handleFolderChange}
-        onSearch={handleSearch}
-        zoom={zoom}
-        onZoomChange={handleZoomChange}
-        isGrouped={isGrouped}
-        onGroupToggle={handleGroupToggle}
-        viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
-        mainRef={mainScrollRef} // For scrolling
-        // Pass down refs for internal elements
-        sidebarRef={sidebarRef}
-        navbarRef={navbarRef}
-        contentAreaRef={contentAreaRef}
-        // Pass MainContent explicitly as a prop
-        mainContentSlot={
-          <MainContent
-            zoom={zoom}
-            searchQuery={searchQuery}
-            selectedFolder={selectedFolder}
-            isGrouped={isGrouped}
-            viewMode={viewMode}
-            scrollContainerRef={mainScrollRef}
-          />
-        }
-      />
-    </div>
+    // Wrap the entire output in the AppSettingsProvider
+    <AppSettingsProvider>
+      <div ref={layoutWrapperRef}>
+        <Layout
+          // Pass only necessary props, like refs
+          mainRef={mainScrollRef} // Keep ref for scrolling
+          sidebarRef={sidebarRef}
+          navbarRef={navbarRef}
+          contentAreaRef={contentAreaRef}
+          // Pass MainContent explicitly as a prop, remove drilled props from it too
+          mainContentSlot={
+            <MainContent
+              scrollContainerRef={mainScrollRef} // Keep ref
+            />
+          }
+        />
+      </div>
+    </AppSettingsProvider>
   );
 };
 

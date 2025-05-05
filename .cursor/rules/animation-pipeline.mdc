@@ -1,0 +1,92 @@
+# Animation Pipeline (`AnimationPipeline.ts`)
+
+## 1. Purpose
+
+The `AnimationPipeline` class (`src/animations/AnimationPipeline.ts`) provides a structured way to create, manage, and trigger GSAP animation sequences within React components. Its primary goal is to:
+# Animation Pipeline (`AnimationPipeline.ts`)
+
+## 1. Purpose
+
+The `AnimationPipeline` class (`src/animations/AnimationPipeline.ts`) provides a structured way to create, manage, and trigger **GSAP** animation sequences within React components. Its primary goal is to:
+
+*   Abstract GSAP Complexity
+*   Promote Reusability: Encourage defining **GSAP** animations as named presets.
+    *   Presets are organized by feature (e.g., `dragDrop/`, `uiEffects/`) within `src/animations/presets/`.
+    *   They are exported collectively as `gsapConfigs` from `src/animations/presets/index.ts`.
+*   Manage Lifecycle: Handle GSAP timeline creation and cleanup (`kill()`).
+*   Orchestrate Sequences.
+
+## 2. How it Works
+
+*   Wraps GSAP Timeline.
+*   Step-Based API: `pipeline.addStep({ target, preset, vars?, position? })`.
+*   Preset Driven: Steps reference a preset name (string key) from the combined `gsapConfigs` object (imported from `src/animations/presets`). The pipeline applies `initialVars`, `defaults`, and `vars` from the preset.
+*   Playback Control: `play`, `pause`, `reverse`, `restart`.
+*   Cleanup: `kill()`, `clear()`.
+
+## 3. When to Use
+
+Use the `AnimationPipeline` for:
+
+*   Complex **GSAP** Sequences.
+*   Reusable **GSAP** Animations defined as presets.
+*   Imperative Control over **GSAP** sequences.
+
+## 4. When NOT to Use (Use Framer Motion Directly)
+
+Do **NOT** use the `AnimationPipeline` for animations better handled declaratively by **Framer Motion**:
+
+*   Layout Animations (`layout` prop).
+*   Mount/Unmount Animations (`<AnimatePresence>`).
+*   Simple State-Driven Animations (`variants` + `animate` prop).
+*   Gesture Animations (`whileHover`, etc.).
+
+**Rationale:** Keep GSAP (imperative, pipeline) and Framer Motion (declarative) separate. Use the right tool for the job. Framer Motion presets (`motionVariants`) are defined separately in `src/animations/presets/uiEffects/framerPresets.ts` and exported via `src/animations/presets/index.ts` (for potential use with `MotionPreset.tsx` or direct import).
+
+## 5. Basic Usage Example (in a React Component)
+
+```typescript
+import React, { useRef, useEffect } from 'react';
+import { AnimationPipeline } from '../animations/AnimationPipeline';
+// Note: Presets are loaded internally by AnimationPipeline
+
+const MyComponent: React.FC = () => {
+  const elementRef = useRef<HTMLDivElement>(null);
+  const pipelineRef = useRef<AnimationPipeline | null>(null);
+
+  // Initialize pipeline on mount
+  useEffect(() => {
+    pipelineRef.current = new AnimationPipeline();
+    return () => {
+      pipelineRef.current?.kill(); // IMPORTANT: Cleanup!
+    };
+  }, []);
+
+  // Example: Trigger animation on button click
+  const handleAnimate = () => {
+    if (!elementRef.current || !pipelineRef.current) return;
+
+    pipelineRef.current
+      .clear()
+      .addStep({ target: elementRef.current, preset: 'fadeIn' }) // Uses preset from generalGsapPresets
+      .addStep({ target: elementRef.current, preset: 'hoverPop', position: '-=0.2' }) // Uses preset from generalGsapPresets
+      .play();
+  };
+
+  return (
+    <div>
+      <div ref={elementRef} style={{ opacity: 0 }}>Animate Me</div>
+      <button onClick={handleAnimate}>Run Animation</button>
+    </div>
+  );
+};
+
+export default MyComponent;
+```
+
+## 6. Key Considerations
+
+*   **GSAP Presets:** Define in feature-specific files under `src/animations/presets/`. Imported via `src/animations/presets/index.ts`.
+*   **Target:** Pass DOM element(s) to `target`.
+*   **Cleanup:** Always call `pipeline.kill()`.
+*   **Framer Motion:** Use directly. Framer presets are in `src/animations/presets/uiEffects/framerPresets.ts`.

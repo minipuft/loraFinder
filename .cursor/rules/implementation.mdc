@@ -36,14 +36,20 @@ alwaysApply: false
 - **SSR Considerations:** Ensure components are SSR-compatible. Avoid direct DOM manipulation outside of `useEffect` hooks. Be mindful of code that relies solely on browser APIs during server rendering.
 - **Animation Integration:**
   - The core animation pipeline remains powered by GSAP via `AnimationPipeline` (`src/animations/AnimationPipeline.ts`).
+    - GSAP presets for the pipeline are defined in feature-specific files (e.g., `itemPresets.ts`, `rowPresets.ts`, `generalGsapPresets.ts`) under `src/animations/presets/` and exported collectively as `gsapConfigs` from `src/animations/presets/index.ts`.
   - For grid grouping/ungrouping, a new hybrid approach is used:
     1. `GroupingAnimator` (`src/animations/GroupingAnimator.ts`) orchestrates GSAP timelines to pile cards into a deck on grouping transitions.
     2. Framer Motion's `<AnimatePresence>` and `exit` variants in `ImageRow` handle ungrouping, smoothly flying cards back to the grid before removal.
     3. A unified effect in `ImageFeed` defers React state updates until after the GSAP animation on grouping, or immediately on ungrouping, ensuring continuous 60fps flow.
-  - Components should be wrapped in `<AnimatePresence exitBeforeEnter>` and use `layout` props on motion elements for automatic layout transitions.
+  - Components should use **Framer Motion** directly for declarative animations:
+    - Use `<AnimatePresence>` for mount/unmount animations.
+    - Use the `layout` prop for automatic layout transitions.
+    - Use `variants` and the `animate` prop for state-driven UI animations.
+    - Framer Motion presets (`motionVariants`) are defined in `src/animations/presets/uiEffects/framerPresets.ts` and exported via `src/animations/presets/index.ts` for potential reuse (e.g., with the currently unused `MotionPreset.tsx` component or direct import).
   - **Drag & Drop:**
     - Logic (drag start, over, end events; item reordering) is handled by `@dnd-kit/core` and `@dnd-kit/sortable`, primarily configured within `src/contexts/DragContext.tsx`.
-    - Visuals (smooth layout shifts, drag state appearance, drop indicators) are enhanced using Framer Motion (`motion.div`, `layout` prop, `variants`) within `src/components/ImageItem.tsx`, with animation definitions in `src/animations/dragReorderAnimations.ts`.
+    - Visuals (drag state appearance, drop target highlighting, indicators) are now primarily controlled imperatively via the `AnimationPipeline` within `ImageItem.tsx` and `ImageRow.tsx`, using GSAP presets defined in `src/animations/presets/dragDrop/`.
+    - Framer Motion's `layout` prop is still used on `ImageRow` and `ImageItem`'s wrapper `motion.div` for smooth positional adjustments during/after reordering.
 - **Dependencies:** Keep dependencies up-to-date. Use `npm install` for adding dependencies. Validate dependencies using `npm run validate:deps`.
 - **Security:** Sanitize user inputs, validate data using libraries like Zod, be mindful of file system access permissions, and avoid exposing sensitive information.
 

@@ -1,8 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styles from '../styles/ImageRow.module.scss';
 import { ImageInfo } from '../types/index.js';
 // import { createImageProcessor } from '../workers/imageProcessor'; // No longer needed directly
 import { AnimatePresence, motion, Variants } from 'framer-motion';
+import { useAnimationPipeline } from '../animations/AnimationManager'; // Import the hook
 import { useDragContext } from '../contexts/DragContext';
 import WorkerPool from '../workers/workerPool'; // Import WorkerPool type
 import ImageItem, { ImageHoverData } from './ImageItem.js';
@@ -36,6 +37,7 @@ interface ImageRowProps {
   layoutDataMap: Map<string, LayoutData>; // <-- Add layoutDataMap prop
   /** Called when the exit animation completes for grouping transitions */
   onExitComplete?: () => void;
+  rowIndex: number; // <-- Add rowIndex prop
 }
 
 // Define a smoother transition for layout animations using a soft spring
@@ -65,9 +67,74 @@ const ImageRow: React.FC<ImageRowProps> = ({
   onExitComplete,
   isLastRow,
   containerWidth,
+  rowIndex, // <-- Destructure rowIndex
 }) => {
   const rowRef = useRef<HTMLDivElement>(null);
-  const { activeId, potentialDropTarget } = useDragContext();
+  const { activeId, itemDropTarget, hoveredRowIndex } = useDragContext();
+
+  // Get scoped pipeline using the hook
+  const pipeline = useAnimationPipeline(`row-${rowIndex}`);
+
+  // Remove local state for pipeline
+  // const pipelineRef = useRef<AnimationPipeline | null>(null);
+  const [isHoverTarget, setIsHoverTarget] = useState(false);
+  const [isDragSource, setIsDragSource] = useState(false);
+
+  // Remove pipeline initialization useEffect
+  /*
+  useEffect(() => {
+    if (rowRef.current) {
+      pipelineRef.current = new AnimationPipeline(); // Initialize on mount
+    }
+    return () => {
+      pipelineRef.current?.kill(); // Clean up on unmount (Manager handles this now)
+    };
+  }, []);
+  */
+
+  // Effect to handle row hover state changes (use `pipeline` directly)
+  useEffect(() => {
+    const isCurrentlyHoverTarget = hoveredRowIndex === rowIndex;
+    if (isCurrentlyHoverTarget !== isHoverTarget) {
+      setIsHoverTarget(isCurrentlyHoverTarget);
+      if (isCurrentlyHoverTarget) {
+        console.log(`[ImageRow ${rowIndex}] Hover Enter - Target Row`);
+        pipeline // Use the hook's pipeline instance
+          .clear()
+          .addStep({ target: rowRef.current!, preset: 'rowHoverEnter' })
+          .play();
+      } else {
+        console.log(`[ImageRow ${rowIndex}] Hover Leave - Target Row`);
+        pipeline // Use the hook's pipeline instance
+          .clear()
+          .addStep({ target: rowRef.current!, preset: 'rowHoverLeave' })
+          .play();
+      }
+    }
+  }, [hoveredRowIndex, rowIndex, isHoverTarget, pipeline]); // Add pipeline to dependencies
+
+  // Effect to handle when the row contains the actively dragged item (use `pipeline` directly)
+  useEffect(() => {
+    const containsActive = activeId ? images.some(img => img.id === activeId) : false;
+    if (containsActive !== isDragSource) {
+      setIsDragSource(containsActive);
+      if (containsActive) {
+        console.log(`[ImageRow ${rowIndex}] Drag Source Active`);
+        pipeline // Use the hook's pipeline instance
+          .clear()
+          .addStep({ target: rowRef.current!, preset: 'rowDragSourceActive' })
+          .play();
+      } else {
+        if (!isHoverTarget) {
+          console.log(`[ImageRow ${rowIndex}] Drag Source Inactive`);
+          pipeline // Use the hook's pipeline instance
+            .clear()
+            .addStep({ target: rowRef.current!, preset: 'rowHoverLeave' })
+            .play();
+        }
+      }
+    }
+  }, [activeId, images, rowIndex, isDragSource, isHoverTarget, pipeline]); // Add pipeline to dependencies
 
   if (
     !images ||
@@ -81,13 +148,16 @@ const ImageRow: React.FC<ImageRowProps> = ({
   }
 
   // Use context values for highlighting
-  const containsActiveItem = activeId ? images.some(img => img.id === activeId) : false;
-  const containsDropTarget = potentialDropTarget
-    ? images.some(img => img.id === potentialDropTarget.targetId)
-    : false;
-  const rowClassName = `${styles.imageRow} ${
-    containsActiveItem ? styles.sourceRow : ''
-  } ${containsDropTarget ? styles.targetRow : ''}`;
+  // const containsActiveItem = activeId ? images.some(img => img.id === activeId) : false; // Handled by useEffect
+  // const containsDropTarget = itemDropTarget // Use itemDropTarget now
+  //   ? images.some(img => img.id === itemDropTarget?.targetId)
+  //   : false;
+  // const rowClassName = `${styles.imageRow} ${
+  //   containsActiveItem ? styles.sourceRow : ''
+  // } ${containsDropTarget ? styles.targetRow : ''}`;
+
+  // Use base class name, animations will handle visual state
+  const rowClassName = styles.imageRow;
 
   return (
     <motion.div
@@ -167,10 +237,13 @@ const ImageRow: React.FC<ImageRowProps> = ({
           };
 
           // Use context values to determine drop target state for the specific item
-          const isDropTarget = potentialDropTarget?.targetId === image.id;
-          const dropPosition = isDropTarget ? potentialDropTarget.position : null;
+          const isDropTargetForItem =
+            itemDropTarget?.targetId === image.id && hoveredRowIndex === rowIndex;
+          const dropPositionForItem = isDropTargetForItem
+            ? (itemDropTarget?.position ?? null)
+            : null;
 
-          const itemAnimationState = isDropTarget ? 'highlighted' : 'normal';
+          const itemAnimationState = isDragSource ? 'highlighted' : 'normal';
           const dragInteractionVariants: Variants = {
             normal: {
               scale: 1,
@@ -191,6 +264,10 @@ const ImageRow: React.FC<ImageRowProps> = ({
               },
             },
           };
+
+          // Cast activeId to string | null for ImageItem prop compatibility
+          const activeItemIdAsString: string | null =
+            typeof activeId === 'string' ? activeId : null;
 
           return (
             <motion.div
@@ -236,9 +313,9 @@ const ImageRow: React.FC<ImageRowProps> = ({
                   onImageHover={onImageHover}
                   onImageLoadError={onImageLoadError}
                   dominantColor={dominantColor}
-                  activeId={activeId as string | null}
-                  isDropTarget={isDropTarget}
-                  dropPosition={dropPosition}
+                  activeId={activeItemIdAsString}
+                  isDropTarget={isDropTargetForItem}
+                  dropPosition={dropPositionForItem}
                 />
               </motion.div>
             </motion.div>

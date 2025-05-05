@@ -1,5 +1,5 @@
 import { gsap } from 'gsap';
-import { gsapConfigs } from './motionPresets';
+import { gsapConfigs } from './presets';
 
 // Define the structure for a step in the pipeline
 interface AnimationStepOptions {

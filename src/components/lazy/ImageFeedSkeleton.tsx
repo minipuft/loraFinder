@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import styles from '../styles/ImageFeedSkeleton.module.scss'; // Create this SCSS module
-import { ViewMode } from '../types';
-import { calculateGapSize, calculateLayout, LayoutConfig } from '../utils/layoutCalculator';
-import ImageSkeleton from './ImageSkeleton.js'; // Assuming .js extension based on ImageFeed import
+import styles from '../../styles/ImageFeedSkeleton.module.scss'; // Create this SCSS module
+import { ViewMode } from '../../types';
+import { calculateGapSize, calculateLayout, LayoutConfig } from '../../utils/layoutCalculator';
+import ImageSkeleton from '../ImageSkeleton.js'; // Assuming .js extension based on ImageFeed import
 
 interface ImageFeedSkeletonProps {
   folder: string; // Used for keying or potential future use

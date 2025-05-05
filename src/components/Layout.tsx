@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { ViewMode } from '../types/index.js';
+// Removed ViewMode import, will get from context if needed internally
 import Navbar from './Navbar.js';
 import Sidebar from './Sidebar.js';
 // import { getImages } from '../lib/api.js'; // Removed: Data fetching moved to hooks/ImageFeed
@@ -17,16 +17,9 @@ gsap.registerPlugin(ScrollToPlugin);
 
 // Define the props interface for the Layout component
 interface LayoutProps {
+  // Remove props managed by context
   mainContentSlot: React.ReactNode;
-  selectedFolder: string;
-  onFolderChange: (folder: string) => void;
-  onSearch: (query: string) => void;
-  zoom: number;
-  onZoomChange: (newZoom: number) => void;
-  isGrouped: boolean;
-  onGroupToggle: () => void;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
+  // Keep refs
   mainRef: React.RefObject<HTMLElement>;
   navbarRef?: React.Ref<HTMLDivElement>;
   sidebarRef?: React.Ref<HTMLDivElement>;
@@ -37,16 +30,8 @@ interface LayoutProps {
 const Layout = forwardRef<HTMLDivElement, LayoutProps>(
   (
     {
+      // Destructure only remaining props
       mainContentSlot,
-      selectedFolder,
-      onFolderChange,
-      onSearch,
-      zoom,
-      onZoomChange,
-      isGrouped,
-      onGroupToggle,
-      viewMode,
-      onViewModeChange,
       mainRef,
       navbarRef,
       sidebarRef,
@@ -54,6 +39,8 @@ const Layout = forwardRef<HTMLDivElement, LayoutProps>(
     },
     ref
   ) => {
+    // No need to use context directly in Layout if it only passes things down
+    // Children (Navbar, Sidebar) will consume the context
     useCustomProperties();
 
     // State variables for managing images, loading state, error, and search query
@@ -89,10 +76,10 @@ const Layout = forwardRef<HTMLDivElement, LayoutProps>(
     // }, [selectedFolder]); // Removed: Data fetching moved to hooks/ImageFeed
 
     // Handler for search functionality
-    const handleSearch = (query: string) => {
-      // setSearchQuery(query);
-      onSearch(query); // Propagate search up if needed
-    };
+    // const handleSearch = (query: string) => {
+    //   // setSearchQuery(query);
+    //   onSearch(query); // Propagate search up if needed
+    // };
 
     // Handler for when image upload is complete
     // const handleUploadComplete = () => {
@@ -126,19 +113,21 @@ const Layout = forwardRef<HTMLDivElement, LayoutProps>(
           {/* <ParticleBackground /> */}
           <Navbar
             ref={navbarRef}
-            onSearch={handleSearch}
-            zoom={zoom}
-            onZoomChange={onZoomChange}
-            isGrouped={isGrouped}
-            onGroupToggle={onGroupToggle}
-            viewMode={viewMode}
-            onViewModeChange={onViewModeChange}
+            // Remove props now provided by context
+            // onSearch={handleSearch}
+            // zoom={zoom}
+            // onZoomChange={onZoomChange}
+            // isGrouped={isGrouped}
+            // onGroupToggle={onGroupToggle}
+            // viewMode={viewMode}
+            // onViewModeChange={onViewModeChange}
           />
           <div className="flex flex-1 overflow-hidden">
             <Sidebar
               ref={sidebarRef}
-              selectedFolder={selectedFolder}
-              onFolderChange={onFolderChange}
+              // Remove props now provided by context
+              // selectedFolder={selectedFolder}
+              // onFolderChange={onFolderChange}
             />
             <main ref={mainRef} className="flex-1 overflow-auto p-4 relative bg-transparent">
               {contentAreaRef ? (

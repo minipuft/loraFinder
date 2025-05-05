@@ -8,8 +8,12 @@ const GROUP_SCALE = 0.7;
 const GROUP_ROTATION_RANGE = 10; // degrees
 
 export class GroupingAnimator {
-  private pipeline: AnimationPipeline | null = null;
-  private isGrouping: boolean = false; // Track current animation state
+  private pipeline: AnimationPipeline;
+  private isGrouping: boolean = false;
+
+  constructor(pipelineInstance: AnimationPipeline) {
+    this.pipeline = pipelineInstance;
+  }
 
   /**
    * Animates cards from their current position to a stacked deck at feedCenter.
@@ -17,36 +21,25 @@ export class GroupingAnimator {
    * @param feedCenter - The {x, y} coordinates of the center of the feed area.
    */
   group(cards: HTMLElement[], feedCenter: { x: number; y: number }) {
-    if (!cards.length || this.isGrouping) return; // Don't run if already grouping or no cards
+    if (!cards.length || this.isGrouping) return;
 
-    // Kill any existing animation before starting a new one
-    this.kill();
-    this.pipeline = new AnimationPipeline({
-      // Ensure completion callback clears the state
-      onComplete: () => {
-        this.isGrouping = true; // Mark as grouped *after* animation finishes
-      },
-    });
-    this.isGrouping = true; // Set immediately to prevent re-triggering during animation
+    this.pipeline.clear();
+
+    this.isGrouping = true;
 
     cards.forEach((card, i) => {
-      // Ensure card has dimensions before calculating offsets
       if (card.offsetWidth === 0 || card.offsetHeight === 0) {
         console.warn(`Card ${card.id || i} has zero dimensions, skipping animation.`);
         return;
       }
-
       const rect = card.getBoundingClientRect();
-      // Calculate offset relative to the viewport
       const offsetX = feedCenter.x - (rect.left + rect.width / 2);
       const offsetY = feedCenter.y - (rect.top + rect.height / 2);
+      gsap.set(card, { zIndex: 10 + i });
 
-      // Set initial state *before* adding to timeline if needed (e.g., zIndex)
-      gsap.set(card, { zIndex: 10 + i }); // Bring cards forward during animation
-
-      this.pipeline!.addStep({
+      this.pipeline.addStep({
         target: card,
-        preset: 'none', // Indicate we are using custom vars, not a named preset
+        preset: 'none',
         vars: {
           x: offsetX,
           y: offsetY,
@@ -54,44 +47,51 @@ export class GroupingAnimator {
           rotation: (Math.random() - 0.5) * GROUP_ROTATION_RANGE,
           duration: GROUP_DURATION,
           ease: 'power2.out',
-          // Overwrite transform preserves other transforms (like Framer Motion's)
-          // Set overwrite: 'auto' if conflicts arise, but start with false/none.
           overwrite: false,
         },
-        position: `+=${GROUP_STAGGER}`, // Use relative stagger
+        position: `+=${GROUP_STAGGER}`,
       });
     });
 
-    this.pipeline.play();
+    this.pipeline
+      .play()
+      .then(() => {
+        if (this.isGrouping) {
+          console.log('[GroupingAnimator] Group animation complete.');
+        }
+      })
+      .catch(error => {
+        console.error('[GroupingAnimator] Play error:', error);
+        this.isGrouping = false;
+      });
   }
 
   /**
    * Reverses the grouping animation, returning cards to their original positions.
    */
   ungroup() {
-    if (!this.isGrouping || !this.pipeline) return; // Only ungroup if currently grouped
+    if (!this.isGrouping || !this.pipeline) return;
 
-    // Reverse the timeline to smoothly return cards
-    this.pipeline.reverse().then(() => {
-      // Reset state *after* reverse animation completes
-      this.isGrouping = false;
-      // Optionally reset inline styles set by GSAP if Framer Motion doesn't override
-      // gsap.set(cards, { clearProps: "transform,zIndex" }); // Example cleanup
-    });
-    // Prevent re-triggering ungroup during the reverse animation
-    // Note: isGrouping remains true until reverse completes
+    this.pipeline
+      .reverse()
+      .then(() => {
+        console.log('[GroupingAnimator] Ungroup animation complete.');
+        this.isGrouping = false;
+      })
+      .catch(error => {
+        console.error('[GroupingAnimator] Reverse error:', error);
+      });
   }
 
   /**
-   * Immediately stops and cleans up the animation timeline.
-   * Call this on component unmount or before starting a new conflicting animation.
+   * Clears the timeline managed by this animator.
+   * Note: It no longer kills the pipeline, as that's managed externally.
    */
-  kill() {
+  clear() {
     if (this.pipeline) {
-      this.pipeline.kill();
-      this.pipeline = null;
+      this.pipeline.clear();
     }
-    this.isGrouping = false; // Reset state if animation is killed prematurely
+    this.isGrouping = false;
   }
 
   /**

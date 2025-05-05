@@ -22,18 +22,22 @@ import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails';
 import 'yet-another-react-lightbox/plugins/thumbnails.css';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
+import { useAnimationPipeline } from '../animations/AnimationManager';
 import { GroupingAnimator } from '../animations/GroupingAnimator';
-import { ColorContext } from '../contexts/ColorContext';
+import { useAppSettings } from '../contexts';
+import { ColorContext, HoverState } from '../contexts/ColorContext';
 import { DragProvider } from '../contexts/DragContext';
 import { useImageProcessing } from '../contexts/ImageProcessingContext';
 import { useFolderImages } from '../hooks/query/useFolderImages';
+import { useAnimationCoordinator } from '../hooks/useAnimationCoordinator';
 import { useImageOrderManager } from '../hooks/useImageDragDrop';
 import { usePrefetchManager } from '../hooks/usePrefetchManager';
 import usePrevious from '../hooks/usePrevious';
 import useWindowSize from '../hooks/useWindowSize';
 import { loadScrollState, saveScrollState, ScrollState } from '../lib/cache/feedStateCache';
 import styles from '../styles/ImageFeed.module.scss';
-import { ImageInfo, ViewMode } from '../types/index.js';
+import type { AnimationSequenceConfig, ImageInfo } from '../types';
+import { ViewMode } from '../types';
 import AnimationUtils from '../utils/AnimationUtils';
 import { Rect } from '../utils/intersectionUtils';
 import {
@@ -98,10 +102,6 @@ function useDebouncedMemo<T>(factory: () => T, deps: React.DependencyList, delay
 
 // Define the props interface for ImageFeed component
 interface ImageFeedProps {
-  folderPath: string;
-  isGrouped: boolean;
-  zoom: number;
-  viewMode: ViewMode;
   scrollContainerRef: React.RefObject<HTMLElement>;
 }
 
@@ -159,13 +159,10 @@ interface PotentialDropTarget {
 }
 
 // Define the ImageFeed component
-const ImageFeed: React.FC<ImageFeedProps> = ({
-  folderPath,
-  isGrouped,
-  zoom,
-  viewMode,
-  scrollContainerRef,
-}) => {
+const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
+  // Consume context
+  const { selectedFolder: folderPath, isGrouped, zoom, viewMode } = useAppSettings();
+
   // --- EARLY EXIT if folderPath is invalid --- >
   if (!folderPath || typeof folderPath !== 'string' || folderPath.trim() === '') {
     console.warn('[ImageFeed] Render skipped: Invalid folderPath received.');
@@ -185,7 +182,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const [lightboxIndex, setLightboxIndex] = useState<number>(-1);
   const [lightboxImages, setLightboxImages] = useState<ImageInfo[]>([]);
   const animationUtils = useMemo(() => AnimationUtils.getInstance(), []);
-  const { setDominantColors, setHoverState } = useContext(ColorContext);
+  const { setDominantColors, setHoverState, hoverState } = useContext(ColorContext);
   const [dominantColorMap, setDominantColorMap] = useState<Map<string, string>>(new Map());
   const requestedColorIds = useRef<Set<string>>(new Set());
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -205,7 +202,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
   const { publishImageUpdate } = useImageProcessing();
   const [animatedRowIndices, setAnimatedRowIndices] = useState<Set<number>>(new Set());
-  const previousIsGrouped = usePrevious(isGrouped);
+  const prevIsGrouped = usePrevious(isGrouped);
   const exitResolverRef = useRef<(() => void) | null>(null);
   const [prefetchTargetRange, setPrefetchTargetRange] = useState<[number, number] | null>(null);
   const [calculatedRows, setCalculatedRows] = useState<RowConfig[]>([]);
@@ -698,6 +695,25 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
       onOrderChange: handleOrderChangeCallback, // Pass the stable callback
     });
 
+  // Animation coordination hook for initial load animation
+  const { triggerAnimation: triggerInitialLoadAnimation } =
+    useAnimationCoordinator('image-feed-initial'); // Unique scope
+
+  // Effect for triggering initial load animation
+  useEffect(() => {
+    // Only run when orderedImages is populated and not empty
+    if (orderedImages && orderedImages.length > 0) {
+      console.log('[ImageFeed] Triggering initial load animation via worker.');
+      const config: AnimationSequenceConfig & { itemIds: string[] } = {
+        id: `feed-load-${folderPath}-${Date.now()}`,
+        itemIds: orderedImages.map(img => img.id), // Pass the current item IDs
+        layoutMode: viewMode,
+      };
+      triggerInitialLoadAnimation(config);
+    }
+    // Trigger when folderPath or the resulting orderedImages change
+  }, [orderedImages, folderPath, viewMode, triggerInitialLoadAnimation]);
+
   // Effect to run fetch when order changes OR other layout inputs change significantly
   useEffect(() => {
     if (viewMode !== ViewMode.GRID) return;
@@ -922,7 +938,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   }, [restoredState, scrollContainerRef, virtualItems, folderPath]); // Depend on restored state, ref, virtual items, and folderPath
   // --- End Scroll Restoration Effect ---
 
-  // Callback function for image hover - with delay logic
+  // Callback function for image hover - with delay logic and state check
   const handleImageHover = useCallback(
     (data: ImageHoverData) => {
       // Clear any existing timeout
@@ -931,19 +947,38 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
         hoverTimeoutRef.current = null;
       }
 
+      // Read current state directly from the context value obtained above
+      const currentHoverState = hoverState;
+
       if (data.isHovering) {
         // Set a timeout to activate hover state after a delay
         hoverTimeoutRef.current = setTimeout(() => {
-          // Get color from the state map if available
           const color = dominantColorMap.get(data.imageId) || null;
-          setHoverState({ isHovering: true, position: data.position, color: color });
+          const newHoverState: HoverState = {
+            isHovering: true,
+            position: data.position,
+            color: color,
+          };
+
+          // Only update if the state would actually change
+          if (
+            !currentHoverState.isHovering ||
+            currentHoverState.position?.x !== newHoverState.position?.x || // Safe access
+            currentHoverState.position?.y !== newHoverState.position?.y || // Safe access
+            currentHoverState.color !== newHoverState.color
+          ) {
+            setHoverState(newHoverState);
+          }
         }, 150); // 150ms delay
       } else {
-        // If mouse leaves, immediately deactivate hover state
-        setHoverState({ isHovering: false, position: null, color: null });
+        // If mouse leaves, immediately deactivate hover state ONLY IF it's currently active
+        if (currentHoverState.isHovering) {
+          setHoverState({ isHovering: false, position: null, color: null });
+        }
       }
     },
-    [setHoverState, dominantColorMap] // Dependency remains setHoverState
+    // Dependencies now include hoverState because we read it
+    [setHoverState, dominantColorMap, hoverState]
   );
 
   // Cleanup timeout on unmount
@@ -1074,14 +1109,44 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
   // --- End Color Extraction Worker Integration ---
 
   // <-- Instantiate animator on mount -->
+  const groupingPipeline = useAnimationPipeline('grouping');
   useEffect(() => {
-    groupingAnimatorRef.current = new GroupingAnimator();
+    groupingAnimatorRef.current = new GroupingAnimator(groupingPipeline);
 
     // <-- Cleanup animator on unmount -->
     return () => {
-      groupingAnimatorRef.current?.kill();
+      groupingAnimatorRef.current?.clear();
     };
-  }, []); // Empty dependency array ensures this runs only once on mount/unmount
+  }, [groupingPipeline]);
+
+  // EFFECT TO TRIGGER ANIMATION BASED ON PROP CHANGE
+  useEffect(() => {
+    if (
+      prevIsGrouped !== undefined &&
+      prevIsGrouped !== isGrouped &&
+      groupingAnimatorRef.current &&
+      feedRef.current
+    ) {
+      const animator = groupingAnimatorRef.current;
+      const cards = Array.from(feedRef.current.querySelectorAll('.card')) as HTMLElement[];
+      const feedRect = feedRef.current.getBoundingClientRect();
+
+      if (cards.length > 0) {
+        const feedCenterX = feedRect.left + feedRect.width / 2;
+        const feedCenterY = feedRect.top + 50;
+
+        if (isGrouped) {
+          console.log('[ImageFeed Prop Effect] Grouping triggered...');
+          animator.group(cards, { x: feedCenterX, y: feedCenterY });
+        } else {
+          console.log('[ImageFeed Prop Effect] Ungrouping triggered...');
+          animator.ungroup();
+        }
+      } else {
+        console.warn('[ImageFeed Prop Effect] Cannot group/ungroup: No .card elements found.');
+      }
+    }
+  }, [isGrouped, prevIsGrouped, groupingPipeline]); // Dependency array includes prevIsGrouped
 
   // --- Define getRowRects function --- >
   const getRowRects = useCallback(() => {
@@ -1223,6 +1288,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({
                     onImageLoadError={handleImageLoadError}
                     dominantColorMap={dominantColorMap}
                     onExitComplete={() => exitResolverRef.current && exitResolverRef.current()}
+                    rowIndex={virtualItem.index}
                   />
                 </motion.div>
               );

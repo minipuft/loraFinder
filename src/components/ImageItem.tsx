@@ -2,7 +2,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'framer-motion';
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { dragItemVariants } from '../animations/dragReorderAnimations';
+import { useAnimationPipeline } from '../animations/AnimationManager';
+import { useDragContext } from '../contexts/DragContext';
 import { ProcessedImageUpdate, useImageProcessing } from '../contexts/ImageProcessingContext';
 import styles from '../styles/ImageItem.module.scss';
 import { ImageInfo } from '../types/index.js';
@@ -67,7 +68,14 @@ const ImageItem: React.FC<ImageItemProps> = ({
   const [hasError, setHasError] = useState(false);
   const { subscribeToImageUpdates } = useImageProcessing();
 
-  const isCurrentlyDragging = activeId === image.id;
+  // Get activeId from context to disable passive hover during drag
+  const { activeId: globalActiveId, itemDropTarget: contextItemDropTarget } = useDragContext();
+
+  // --- Animation Setup ---
+  const pipeline = useAnimationPipeline(`item-${image.id}`); // Use PER-ITEM scope
+  const itemRef = useRef<HTMLDivElement | null>(null);
+  const indicatorBeforeRef = useRef<HTMLDivElement>(null);
+  const indicatorAfterRef = useRef<HTMLDivElement>(null);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: image.id,
@@ -99,29 +107,51 @@ const ImageItem: React.FC<ImageItemProps> = ({
 
   const handleMouseEnter = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      // --- Disable passive hover if anything is being dragged --- >
+      if (globalActiveId !== null) return;
+
+      // Trigger passive hover animation
+      pipeline
+        .clear()
+        .addStep({ target: itemRef.current!, preset: 'itemPassiveHoverStart' })
+        .play();
+
+      // Existing AuraBackground update logic (optional)
       const rect = event.currentTarget.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
       const normalizedX = centerX / window.innerWidth;
       const normalizedY = centerY / window.innerHeight;
       onImageHover({
+        // Prop call for Aura background / other parent logic
         isHovering: true,
         position: { x: normalizedX, y: normalizedY },
         color: dominantColor || null,
         imageId: image.id,
       });
     },
-    [onImageHover, image.id, dominantColor]
+    [globalActiveId, pipeline, onImageHover, image.id, dominantColor] // Add deps
   );
 
-  const handleMouseLeave = useCallback(() => {
-    onImageHover({
-      isHovering: false,
-      position: null,
-      color: null,
-      imageId: image.id,
-    });
-  }, [onImageHover, image.id]);
+  const handleMouseLeave = useCallback(
+    () => {
+      // --- Disable passive hover end if anything is being dragged --- >
+      if (globalActiveId !== null) return;
+
+      // Trigger passive hover end animation
+      pipeline.clear().addStep({ target: itemRef.current!, preset: 'itemPassiveHoverEnd' }).play();
+
+      // Existing AuraBackground update logic (optional)
+      onImageHover({
+        // Prop call for Aura background / other parent logic
+        isHovering: false,
+        position: null,
+        color: null,
+        imageId: image.id,
+      });
+    },
+    [globalActiveId, pipeline, onImageHover, image.id] // Add deps
+  );
 
   const handleProcessedImageUpdate = useCallback(
     (data: ProcessedImageUpdate) => {
@@ -136,10 +166,7 @@ const ImageItem: React.FC<ImageItemProps> = ({
 
   useEffect(() => {
     const unsubscribe = subscribeToImageUpdates(image.id, handleProcessedImageUpdate);
-
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [image.id, subscribeToImageUpdates, handleProcessedImageUpdate]);
 
   useEffect(() => {
@@ -194,14 +221,78 @@ const ImageItem: React.FC<ImageItemProps> = ({
   const itemClassName = `
     ${styles.imageItem}
     ${isDragging ? styles.isDragging : ''}
-    ${isDropTarget ? styles.isDropTarget : ''}
-    ${isDropTarget && dropPosition === 'before' ? styles.dropBefore : ''}
-    ${isDropTarget && dropPosition === 'after' ? styles.dropAfter : ''}
   `;
+
+  // --- Effects for Drag/Drop Animations --- >
+
+  // Effect for *being* the dragged item
+  useEffect(() => {
+    if (isDragging) {
+      // Use isDragging from useSortable
+      console.log(`[ImageItem ${image.id}] Drag Start (isDragging true)`);
+      pipeline.clear().addStep({ target: itemRef.current!, preset: 'itemDragStart' }).play();
+    } else {
+      // Check previous state if needed, or just revert if not dragging
+      // This might conflict if it's a drop target, handled by the next effect
+      console.log(`[ImageItem ${image.id}] Drag End (isDragging false)`);
+      // Ensure revert only happens if NOT ALSO a drop target ending
+      if (!isDropTarget) {
+        // Use prop isDropTarget
+        pipeline
+          .clear()
+          .addStep({ target: itemRef.current!, preset: 'itemDropTargetNormal' })
+          .play();
+      }
+    }
+  }, [isDragging, image.id, pipeline, isDropTarget]); // Added isDropTarget
+
+  // Effect for *being* the drop target (drag hover)
+  useEffect(() => {
+    if (isDropTarget) {
+      // Use the prop passed down
+      console.log(`[ImageItem ${image.id}] Drop Target Enter (isDropTarget true)`);
+      pipeline
+        .clear()
+        .addStep({ target: itemRef.current!, preset: 'itemDropTargetHoverStart' })
+        .play(); // Use new preset
+
+      // Show indicators
+      pipeline.addStep({
+        target: indicatorBeforeRef.current!,
+        preset: dropPosition === 'before' ? 'showIndicator' : 'hideIndicator',
+      });
+      pipeline.addStep({
+        target: indicatorAfterRef.current!,
+        preset: dropPosition === 'after' ? 'showIndicator' : 'hideIndicator',
+      });
+      pipeline.play();
+    } else {
+      // Check if previously was drop target to trigger end animation
+      // This requires tracking previous isDropTarget state or careful checks
+      // Simpler: If not the drop target, ensure revert animation plays *unless* it's being dragged
+      console.log(`[ImageItem ${image.id}] Drop Target Leave (isDropTarget false)`);
+      if (!isDragging) {
+        // Only revert if not currently being dragged
+        pipeline
+          .clear()
+          .addStep({ target: itemRef.current!, preset: 'itemDropTargetHoverEnd' })
+          .play(); // Use new preset
+      }
+      // Hide indicators
+      pipeline.addStep({ target: indicatorBeforeRef.current!, preset: 'hideIndicator' });
+      pipeline.addStep({ target: indicatorAfterRef.current!, preset: 'hideIndicator' });
+      pipeline.play();
+    }
+  }, [isDropTarget, dropPosition, image.id, pipeline, isDragging]); // Added isDragging
 
   return (
     <motion.div
-      ref={setNodeRef}
+      data-image-id={image.id}
+      ref={node => {
+        // Combine refs using callback pattern
+        setNodeRef(node);
+        itemRef.current = node;
+      }}
       className={itemClassName}
       style={{
         width: targetWidth,
@@ -215,15 +306,10 @@ const ImageItem: React.FC<ImageItemProps> = ({
       {...attributes}
       {...listeners}
       layout
-      variants={dragItemVariants}
-      animate={isDragging ? 'dragging' : 'initial'}
     >
-      {isDropTarget && dropPosition === 'before' && (
-        <div className={styles.dropIndicatorBefore} data-position="before"></div>
-      )}
-      {isDropTarget && dropPosition === 'after' && (
-        <div className={styles.dropIndicatorAfter} data-position="after"></div>
-      )}
+      {/* Indicators */}
+      <div ref={indicatorBeforeRef} className={styles.indicatorBefore} />
+      <div ref={indicatorAfterRef} className={styles.indicatorAfter} />
 
       <div className={styles.imageItemInner} onClick={handleClick}>
         <ErrorBoundary fallback={<div className={styles.imageError}>Error</div>}>

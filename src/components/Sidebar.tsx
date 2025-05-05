@@ -1,22 +1,25 @@
 import { motion } from 'framer-motion';
 import React, { forwardRef, useEffect, useState } from 'react';
 import { FaHome } from 'react-icons/fa';
+import { useAppSettings } from '../contexts'; // Import context hook
 import { useFolders } from '../hooks/query/useFolders';
 import styles from '../styles/Sidebar.module.scss';
 import { getHomeDirectory, setHomeDirectory } from '../utils/settings';
 
 // Define the props interface for the Sidebar component
 interface SidebarProps {
-  selectedFolder: string;
-  onFolderChange: (folder: string) => void;
+  // Keep ref if needed
 }
 
 // Use forwardRef to allow passing ref to the underlying motion.div
 const Sidebar = forwardRef<HTMLDivElement, SidebarProps>(
   (
-    { selectedFolder, onFolderChange },
+    {}, // Remove destructured props
     ref // Receive the ref
   ) => {
+    // Consume context
+    const { selectedFolder, handleFolderChange } = useAppSettings();
+
     // Call the hook to fetch folders
     const { data: folders, isLoading, isError, error } = useFolders();
     // State to track the current home directory for styling
@@ -78,13 +81,14 @@ const Sidebar = forwardRef<HTMLDivElement, SidebarProps>(
               <li
                 key={folder.name}
                 className={`${styles.folderItem} group ${selectedFolder === folder.name ? styles.selectedFolder : ''}`}
-                // Handle folder selection on the list item itself for better structure
-                onClick={() => onFolderChange(folder.name)}
+                // Use context handler
+                onClick={() => handleFolderChange(folder.name)}
                 role="button" // Add role for accessibility
                 tabIndex={0} // Make it focusable
+                // Use context handler
                 onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') onFolderChange(folder.name);
-                }} // Keyboard accessibility
+                  if (e.key === 'Enter' || e.key === ' ') handleFolderChange(folder.name);
+                }}
               >
                 <span className={styles.folderName}>{folder.name}</span>
                 {/* Set Home button is now a sibling, not a child */}

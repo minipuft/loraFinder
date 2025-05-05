@@ -1,17 +1,10 @@
 import React from 'react';
-import { ViewMode } from '../types/index.js';
+import { useAppSettings } from '../contexts'; // Import context hook
 import ImageViewer from './ImageViewer.js';
 
 // Define the props interface for the MainContent component
 interface MainContentProps {
   // images: ImageInfo[]; // Removed
-  selectedFolder: string;
-  searchQuery: string; // Kept for now, but its usage needs re-evaluation
-  // isLoading: boolean; // Removed
-  // error: string | null; // Removed
-  zoom: number;
-  isGrouped: boolean;
-  viewMode: ViewMode;
   scrollContainerRef: React.RefObject<HTMLElement>;
   // animationPipeline: AnimationPipeline;
 }
@@ -19,38 +12,32 @@ interface MainContentProps {
 // MainContent component that renders the primary content area of the application
 const MainContent: React.FC<MainContentProps> = ({
   // images, // Removed
-  selectedFolder,
-  searchQuery, // Kept for now
-  // isLoading, // Removed
-  // error, // Removed
-  zoom,
-  isGrouped,
-  viewMode,
   scrollContainerRef,
   // animationPipeline,
 }) => {
-  // Removed the filtering logic for now. Search needs to be handled differently.
+  // Consume context to get values - these will be used by ImageViewer via context later
+  const { selectedFolder, zoom, isGrouped, viewMode, searchQuery } = useAppSettings();
+
+  // TODO: Filter images based on searchQuery if applicable here or in ImageFeed/ImageViewer
   // const filteredImages = useMemo(() => {
   //   if (!searchQuery) return images;
-  //   return images.filter(image => image.alt.toLowerCase().includes(searchQuery.toLowerCase()));
+  //   return images.filter(img => img.title.toLowerCase().includes(searchQuery.toLowerCase()));
   // }, [images, searchQuery]);
 
   // Render the main content
   return (
-    <>
-      {/* Render the ImageViewer component */}
+    <div className="main-content h-full w-full bg-transparent">
+      {/* ImageViewer will consume context directly in the next step */}
+      {/* We pass the scroll ref, but other props will be removed from ImageViewer */}
       <ImageViewer
         // images={filteredImages} // Removed
         // isLoading={isLoading} // Removed
         // error={error} // Removed
-        selectedFolder={selectedFolder}
-        zoom={zoom}
-        isGrouped={isGrouped}
-        viewMode={viewMode}
+        // Props removed - ImageViewer uses context now
         scrollContainerRef={scrollContainerRef}
         // animationPipeline={animationPipeline}
       />
-    </>
+    </div>
   );
 };
 

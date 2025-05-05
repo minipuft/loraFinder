@@ -7,7 +7,7 @@ import {
   VariantLabels,
 } from 'framer-motion';
 import React from 'react';
-import { MotionPresetName, motionVariants } from './motionPresets';
+import { motionVariants } from './presets';
 
 // --- Define the supported elements explicitly for type safety ---
 type SupportedMotionElement =
@@ -41,7 +41,7 @@ const motionComponents: {
 // Separate standard HTML/React props from MotionProps for clarity
 interface BasePresetProps {
   as?: SupportedMotionElement;
-  preset: MotionPresetName;
+  preset: keyof typeof motionVariants;
   children?: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;

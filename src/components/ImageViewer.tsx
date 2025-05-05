@@ -1,27 +1,20 @@
 import React, { RefObject, Suspense, useEffect, useRef, useState } from 'react';
+import { useAppSettings } from '../contexts';
 import styles from '../styles/ImageViewer.module.scss';
-import { ViewMode } from '../types/index.js';
 import ErrorBoundary from './ErrorBoundary';
-import ImageFeedSkeleton from './ImageFeedSkeleton';
+import ImageFeedSkeleton from './lazy/ImageFeedSkeleton';
 import { LazyImageFeed } from './lazy/lazyWidgets';
 
 // Define the props interface for the ImageViewer component
 interface ImageViewerProps {
-  selectedFolder: string;
-  isGrouped: boolean;
-  zoom: number;
-  viewMode: ViewMode;
   scrollContainerRef: RefObject<HTMLElement>;
 }
 
 // Define the ImageViewer component
-const ImageViewer: React.FC<ImageViewerProps> = ({
-  selectedFolder,
-  isGrouped,
-  zoom,
-  viewMode,
-  scrollContainerRef,
-}) => {
+const ImageViewer: React.FC<ImageViewerProps> = ({ scrollContainerRef }) => {
+  // Consume context
+  const { selectedFolder, isGrouped, zoom, viewMode } = useAppSettings();
+
   // Need container width for the skeleton fallback
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined);
@@ -51,7 +44,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
           {/* Suspense boundary keyed by folder path */}
           {/* Shows skeleton fallback immediately on folder change */}
           <Suspense
-            key={selectedFolder} // Force Suspense reset on folder change
+            key={selectedFolder} // Use selectedFolder from context
             fallback={
               <ImageFeedSkeleton
                 folder={selectedFolder}
@@ -63,13 +56,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({
             }
           >
             {/* Lazy load the actual ImageFeed */}
-            <LazyImageFeed
-              folderPath={selectedFolder}
-              isGrouped={isGrouped}
-              zoom={zoom}
-              viewMode={viewMode}
-              scrollContainerRef={scrollContainerRef}
-            />
+            <LazyImageFeed scrollContainerRef={scrollContainerRef} />
           </Suspense>
         </ErrorBoundary>
       </div>
