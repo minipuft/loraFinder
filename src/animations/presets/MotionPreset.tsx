@@ -7,7 +7,7 @@ import {
   VariantLabels,
 } from 'framer-motion';
 import React from 'react';
-import { motionVariants } from './presets';
+import { motionVariants } from '.';
 
 // --- Define the supported elements explicitly for type safety ---
 type SupportedMotionElement =

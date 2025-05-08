@@ -49,6 +49,23 @@ The goal of this system is to provide a unified way to manage and orchestrate GS
 4.  **Presets (`src/animations/presets/`)**
     - Pre-defined animation configurations (GSAP vars, defaults) are stored here.
     - Used by passing the preset key name to `pipeline.addStep({ preset: 'presetName', ... })`.
+    - See the [Creating Presets Guide](./animation-system/creating-presets.md) for step-by-step instructions on defining custom presets.
+
+## Animation Coordinator Worker
+
+The `AnimationCoordinator` web worker provides an off-main-thread mechanism for sequencing animation steps. It uses **Comlink** to:
+
+- Accept a sequence config (`AnimationSequenceConfig`) including `itemIds`.
+- Proxy callbacks for progress updates (`onProgress(sequenceId, progress)`), step execution (`onStepExecute(sequenceId, step)`), and completion (`onComplete(sequenceId, success, message)`).
+- Generate step instructions (e.g., fade-in/up) and dispatch them back to the main thread, batching and staggering as defined by presets or overrides.
+
+**Location:** `src/workers/animationCoordinator.worker.ts`
+**Hook:** `useAnimationCoordinator(scope?: string)` in `src/hooks/useAnimationCoordinator.ts` wraps the Comlink API and exposes:
+
+- `api.startSequence(config, onProgress, onStepExecute, onComplete)`
+- `api.ping(message)` for health checks.
+
+Refer to `animation-coordinator.md` in the animation system docs for a complete API reference.
 
 ## Usage
 

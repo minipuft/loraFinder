@@ -23,7 +23,7 @@ import 'yet-another-react-lightbox/plugins/thumbnails.css';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 import { useAnimationPipeline } from '../animations/AnimationManager';
-import { GroupingAnimator } from '../animations/GroupingAnimator';
+import { GroupingAnimator } from '../animations/presets/GroupingAnimator';
 import { useAppSettings } from '../contexts';
 import { ColorContext, HoverState } from '../contexts/ColorContext';
 import { DragProvider } from '../contexts/DragContext';
@@ -603,8 +603,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
   // Define fetchAndUpdateGroupedLayout (check dependencies carefully)
   const fetchAndUpdateGroupedLayout = useCallback(
     async (currentOrderedImages: ImageInfo[]) => {
-      // Dependencies used inside: containerWidth, viewMode, debouncedIsGrouped, workerPool, zoom, layoutMetrics.estimatedRowHeightFallback
-      // State setters are stable: setProcessedGroupedImages, setCalculatedRows, setIsGrouping, setIsLayoutCalculating
       if (!currentOrderedImages || currentOrderedImages.length === 0 || containerWidth <= 0) {
         console.log('[ImageFeed] Skipping data fetch (no images or zero width).');
         setProcessedGroupedImages([]);
@@ -620,24 +618,43 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
       workerPool.cancelAllPendingTasks();
 
       try {
-        // Grouping depends on currentOrderedImages and debouncedIsGrouped
-        const groupingResult = await workerPool.postRequest<
-          GroupingRequestPayload,
-          { groupedImages: ImageGroup[] }
-        >(
-          'grouping',
-          'groupImages',
-          { images: currentOrderedImages, isGrouped: debouncedIsGrouped },
-          { priority: 9 }
-        );
-        setProcessedGroupedImages(groupingResult.groupedImages);
+        let groupsToProcess: ImageGroup[];
+
+        if (!debouncedIsGrouped) {
+          console.log('[ImageFeed] Bypassing grouping worker for ungrouped view.');
+          // Directly create groups for ungrouped view
+          groupsToProcess = currentOrderedImages.map(img => ({
+            key: img.id,
+            images: [img],
+            isCarousel: false, // Individual images are not carousels
+          }));
+          setProcessedGroupedImages(groupsToProcess);
+          // setIsGrouping(false) will be called after this if/else block
+        } else {
+          // Original logic: Call grouping worker when isGrouped is true
+          const groupingResult = await workerPool.postRequest<
+            GroupingRequestPayload,
+            { groupedImages: ImageGroup[] }
+          >(
+            'grouping',
+            'groupImages',
+            { images: currentOrderedImages, isGrouped: debouncedIsGrouped },
+            { priority: 9 }
+          );
+          groupsToProcess = groupingResult.groupedImages;
+          setProcessedGroupedImages(groupsToProcess);
+        }
+
+        // Grouping step (local or worker) is complete
         setIsGrouping(false);
 
-        // Layout depends on groupingResult, containerWidth, zoom, layoutMetrics.estimatedRowHeightFallback
+        // Layout depends on groupsToProcess (either from local generation or worker)
         if (viewMode === ViewMode.GRID) {
-          const firstImages = groupingResult.groupedImages
+          // setIsLayoutCalculating(true); // Already set optimistically if GRID view
+          const firstImages = groupsToProcess
             .map(g => g.images[0])
             .filter(img => img && img.width > 0 && img.height > 0);
+
           if (firstImages.length > 0 && containerWidth > 0) {
             const layoutResult = await workerPool.postRequest<LayoutRequestPayload, RowConfig[]>(
               'layout',
@@ -654,8 +671,9 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
           } else {
             setCalculatedRows([]);
           }
-          setIsLayoutCalculating(false);
+          setIsLayoutCalculating(false); // Layout for GRID is done or skipped
         } else {
+          // Not GRID view, ensure layout states are reset
           setCalculatedRows([]);
           setIsLayoutCalculating(false);
         }
@@ -668,15 +686,13 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
       }
     },
     [
-      // List only the actual dependencies that affect the function's logic
-      containerWidth, // Width change requires layout
-      zoom, // Zoom change requires layout
-      debouncedIsGrouped, // Grouping change requires grouping worker call
-      viewMode, // Switching viewMode affects if layout worker is called
-      layoutMetrics.estimatedRowHeightFallback, // Input to layout worker
-      workerPool, // Stable reference from useMemo
-      // State setters are stable, exclude them
-      // currentOrderedImages is passed as an argument, so not needed in deps array
+      containerWidth,
+      zoom,
+      debouncedIsGrouped,
+      viewMode,
+      layoutMetrics.estimatedRowHeightFallback,
+      workerPool,
+      // State setters (setProcessedGroupedImages, setIsGrouping, etc.) are stable
     ]
   );
 
@@ -1111,6 +1127,8 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
   // <-- Instantiate animator on mount -->
   const groupingPipeline = useAnimationPipeline('grouping');
   useEffect(() => {
+    // Pass the pipeline instance to the animator; it will be stored if needed,
+    // but the animator primarily manages its own timeline now.
     groupingAnimatorRef.current = new GroupingAnimator(groupingPipeline);
 
     // <-- Cleanup animator on unmount -->
@@ -1132,21 +1150,24 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
       const feedRect = feedRef.current.getBoundingClientRect();
 
       if (cards.length > 0) {
-        const feedCenterX = feedRect.left + feedRect.width / 2;
-        const feedCenterY = feedRect.top + 50;
+        // Calculate viewport-relative center for animations
+        // This uses the feedRef, which is the container for the cards.
+        const viewportFeedOriginX = feedRect.left + feedRect.width / 2;
+        const viewportFeedOriginY = feedRect.top + 50; // Current Y offset, review if a different origin is better
+        const viewportOrigin = { x: viewportFeedOriginX, y: viewportFeedOriginY };
 
         if (isGrouped) {
           console.log('[ImageFeed Prop Effect] Grouping triggered...');
-          animator.group(cards, { x: feedCenterX, y: feedCenterY });
+          animator.group(cards, viewportOrigin); // Pass cards and origin
         } else {
           console.log('[ImageFeed Prop Effect] Ungrouping triggered...');
-          animator.ungroup();
+          animator.ungroup(cards, viewportOrigin); // Pass cards and origin
         }
       } else {
         console.warn('[ImageFeed Prop Effect] Cannot group/ungroup: No .card elements found.');
       }
     }
-  }, [isGrouped, prevIsGrouped, groupingPipeline]); // Dependency array includes prevIsGrouped
+  }, [isGrouped, prevIsGrouped, groupingPipeline, feedCenter]); // Added feedCenter to deps as it's used for origin calc
 
   // --- Define getRowRects function --- >
   const getRowRects = useCallback(() => {

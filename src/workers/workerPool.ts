@@ -49,7 +49,14 @@ class WorkerPool {
   private static instance: WorkerPool;
   // Use the more specific type
   private imageProcessor: ImageProcessorInstance | null = null;
-  private layoutWorker: LayoutWorkerInstance | null = null;
+
+  // --- Layout Worker Pool --- >
+  private layoutWorkers: LayoutWorkerInstance[] = [];
+  private layoutWorkerPromises: (Promise<LayoutWorkerInstance> | null)[] = [];
+  private layoutPoolSize: number = 1; // Default to 1, can be configured or dynamically set
+  private nextLayoutWorkerIndex: number = 0;
+  // --- End Layout Worker Pool ---
+
   private colorExtractorWorker: ColorExtractorWorkerInstance | null = null; // Add state for color worker
   private groupingWorker: GroupingWorkerInstance | null = null; // Add state for grouping worker
   private isImageProcessorInitialized = false;
@@ -63,7 +70,7 @@ class WorkerPool {
   private groupingWorkerListeners: Map<string, (event: MessageEvent) => void> = new Map();
 
   // Initialization Promises
-  private layoutWorkerPromise: Promise<LayoutWorkerInstance> | null = null;
+  // private layoutWorkerPromise: Promise<LayoutWorkerInstance> | null = null; // REMOVED - Replaced by layoutWorkerPromises array
   private colorExtractorWorkerPromise: Promise<ColorExtractorWorkerInstance> | null = null;
   private groupingWorkerPromise: Promise<GroupingWorkerInstance> | null = null;
 
@@ -77,10 +84,19 @@ class WorkerPool {
   private colorQueue: PQueue;
   private groupingQueue: PQueue;
 
+  // --- Idle Worker Tracking --- >
+  private workerIdleTimers = new Map<Worker, NodeJS.Timeout>();
+  private workerLastActivity = new Map<Worker, number>();
+  private static readonly DEFAULT_IDLE_TIMEOUT_MS = 60000; // 60 seconds
+
   private constructor() {
     // Initialize queues with desired concurrency
     // Layout and grouping are likely sequential operations affecting the whole view
-    this.layoutQueue = new PQueue({ concurrency: 1 });
+    this.layoutPoolSize = Math.min(
+      2,
+      Math.max(1, Math.floor((navigator.hardwareConcurrency || 4) / 3))
+    ); // e.g. max 2, min 1
+    this.layoutQueue = new PQueue({ concurrency: this.layoutPoolSize }); // Concurrency matches pool size
     this.groupingQueue = new PQueue({ concurrency: 1 });
     // Color extraction can often run more concurrently
     this.colorQueue = new PQueue({
@@ -141,23 +157,81 @@ class WorkerPool {
     }
   }
 
-  // --- Layout Worker Management (Promise-based) ---
-  public getLayoutWorker(): Promise<LayoutWorkerInstance> {
-    if (!this.layoutWorkerPromise) {
-      this.layoutWorkerPromise = this.initializeWorker('layout', LayoutWorker, worker => {
-        this.layoutWorker = worker; // Store the instance
+  // --- Layout Worker Management (Promise-based AND POOLED) --- >
+  private async getAvailableLayoutWorker(): Promise<LayoutWorkerInstance> {
+    if (this.layoutWorkers.length < this.layoutPoolSize) {
+      // Still need to populate the pool up to its configured size
+      const workerIndexToInit = this.layoutWorkers.length; // Next available slot
+
+      if (!this.layoutWorkerPromises[workerIndexToInit]) {
+        console.log(
+          `WorkerPool: Initializing LayoutWorker instance ${workerIndexToInit + 1}/${this.layoutPoolSize}...`
+        );
+        const promise = this.initializeWorker('layout', LayoutWorker, worker => {
+          // Important: setup listeners for THIS SPECIFIC worker instance
+          this.setupWorkerMessageHandler(
+            worker,
+            'layout',
+            this.pendingLayoutRequests,
+            this.layoutWorkerListeners
+          );
+          // Add to the live workers array once successfully initialized and listeners set up
+          // This ensures it's only added if init didn't throw.
+          this.layoutWorkers[workerIndexToInit] = worker;
+        }).catch(err => {
+          this.layoutWorkerPromises[workerIndexToInit] = null; // Reset promise on failure
+          console.error(
+            `WorkerPool: Failed to initialize LayoutWorker instance ${workerIndexToInit}.`,
+            err
+          );
+          throw err; // Re-throw error
+        });
+        this.layoutWorkerPromises[workerIndexToInit] = promise;
+        await promise; // Wait for this specific worker to initialize
+      }
+    }
+
+    // Pool should be populated now, select one via round-robin
+    const selectedWorkerIndex = this.nextLayoutWorkerIndex;
+    this.nextLayoutWorkerIndex = (this.nextLayoutWorkerIndex + 1) % this.layoutPoolSize;
+
+    let workerInstance = this.layoutWorkers[selectedWorkerIndex];
+
+    if (!workerInstance) {
+      // This case should ideally be prevented by the population logic above or if a worker failed catastrophically
+      console.error(
+        `WorkerPool: LayoutWorker instance ${selectedWorkerIndex} not available after attempting population. Retrying initialization for this slot.`
+      );
+      // Attempt to re-initialize this specific slot if it's missing.
+      // This is a fallback, primary initialization should happen as pool populates.
+      this.layoutWorkerPromises[selectedWorkerIndex] = null; // Clear potentially failed promise
+      const reinitializedPromise = this.initializeWorker('layout', LayoutWorker, worker => {
         this.setupWorkerMessageHandler(
           worker,
           'layout',
           this.pendingLayoutRequests,
           this.layoutWorkerListeners
         );
+        this.layoutWorkers[selectedWorkerIndex] = worker;
       }).catch(err => {
-        this.layoutWorkerPromise = null; // Reset promise on failure
-        throw err; // Re-throw error
+        this.layoutWorkerPromises[selectedWorkerIndex] = null;
+        throw err;
       });
+      this.layoutWorkerPromises[selectedWorkerIndex] = reinitializedPromise;
+      return await reinitializedPromise; // Return the promise for the re-initialized worker
     }
-    return this.layoutWorkerPromise;
+
+    // Clear idle timer if acquiring an existing worker
+    const existingTimer = this.workerIdleTimers.get(workerInstance);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.workerIdleTimers.delete(workerInstance);
+      console.log(
+        `[WorkerPool] Cleared idle timer for LayoutWorker instance ${selectedWorkerIndex} as it was acquired.`
+      );
+    }
+
+    return workerInstance;
   }
 
   // --- Color Extractor Worker Management (Promise-based) ---
@@ -174,11 +248,20 @@ class WorkerPool {
             this.pendingColorRequests,
             this.colorExtractorListeners
           );
+          // No idle timer to clear here as it's freshly initialized
         }
       ).catch(err => {
         this.colorExtractorWorkerPromise = null; // Reset promise on failure
         throw err; // Re-throw error
       });
+    } else if (this.colorExtractorWorker) {
+      // If promise exists, worker should too. Clear its idle timer if being re-acquired.
+      const existingTimer = this.workerIdleTimers.get(this.colorExtractorWorker);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.workerIdleTimers.delete(this.colorExtractorWorker);
+        console.log(`[WorkerPool] Cleared idle timer for ColorExtractorWorker as it was acquired.`);
+      }
     }
     return this.colorExtractorWorkerPromise;
   }
@@ -194,10 +277,19 @@ class WorkerPool {
           this.pendingGroupingRequests,
           this.groupingWorkerListeners
         );
+        // No idle timer to clear here as it's freshly initialized
       }).catch(err => {
         this.groupingWorkerPromise = null; // Reset promise on failure
         throw err; // Re-throw error
       });
+    } else if (this.groupingWorker) {
+      // If promise exists, worker should too. Clear its idle timer if being re-acquired.
+      const existingTimer = this.workerIdleTimers.get(this.groupingWorker);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.workerIdleTimers.delete(this.groupingWorker);
+        console.log(`[WorkerPool] Cleared idle timer for GroupingWorker as it was acquired.`);
+      }
     }
     return this.groupingWorkerPromise;
   }
@@ -228,9 +320,9 @@ class WorkerPool {
             new Error((data as WorkerErrorMessage).message || 'Worker returned an error')
           );
         } else {
-          // Assume other types are successful results
-          // console.log(`[WorkerPool] Resolving request ${requestId} for ${workerType}`);
           request.resolve((data as WorkerResponseMessage<T>).payload);
+          // Successfully processed a message, schedule idle check
+          this.scheduleGenericIdleCheck(worker, workerType);
         }
         pendingRequests.delete(requestId);
       } else if (requestId) {
@@ -252,12 +344,18 @@ class WorkerPool {
       // Attempt to reject related pending requests, though we lack specific request ID here
       // This is a limitation if the worker crashes without sending a request-specific error
       const error = new Error(`Worker ${workerType} encountered an error: ${event.message}`);
-      pendingRequests.forEach((request, requestId) => {
+      pendingRequests.forEach((request, id) => {
         console.warn(
-          `[WorkerPool] Rejecting pending request ${requestId} due to generic ${workerType} worker error.`
+          `[WorkerPool] Rejecting pending request ${id} due to generic ${workerType} worker error.`
         );
         clearTimeout(request.timer);
         request.reject(error);
+        // Also clear any idle timer for this worker as it's errored
+        const existingTimer = this.workerIdleTimers.get(worker);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+          this.workerIdleTimers.delete(worker);
+        }
       });
       pendingRequests.clear(); // Clear all pending requests for this worker on generic error
 
@@ -287,7 +385,7 @@ class WorkerPool {
       case 'layout':
         queue = this.layoutQueue;
         pendingRequests = this.pendingLayoutRequests;
-        getWorkerPromise = this.getLayoutWorker.bind(this);
+        getWorkerPromise = this.getAvailableLayoutWorker.bind(this);
         break;
       case 'color':
         queue = this.colorQueue;
@@ -395,7 +493,12 @@ class WorkerPool {
   public addLayoutWorkerListener(id: string, listener: (event: MessageEvent) => void): void {
     console.log(`[WorkerPool] Adding general listener for LayoutWorker: ${id}`);
     this.layoutWorkerListeners.set(id, listener);
-    this.getLayoutWorker(); // Ensure worker is initialized to receive potential messages
+    // Ensure worker pool initialization is triggered if not already started
+    if (this.layoutWorkers.length < this.layoutPoolSize) {
+      this.getAvailableLayoutWorker().catch(err =>
+        console.error('[WorkerPool] Error ensuring layout worker for listener:', err)
+      );
+    }
   }
 
   public removeLayoutWorkerListener(id: string): void {
@@ -483,12 +586,22 @@ class WorkerPool {
     console.log('WorkerPool: Starting cleanup...');
     this.cancelAllPendingTasks(); // Cancel everything first
 
-    // Terminate Workers
-    this.terminateWorker('layout', this.layoutWorker);
-    this.layoutWorker = null;
-    this.layoutWorkerPromise = null;
-    this.layoutWorkerListeners.clear();
+    // Clear all idle timers before terminating workers
+    this.workerIdleTimers.forEach(timerId => clearTimeout(timerId));
+    this.workerIdleTimers.clear();
+    this.workerLastActivity.clear();
 
+    // Terminate Layout Workers Pool
+    for (let i = 0; i < this.layoutWorkers.length; i++) {
+      const worker = this.layoutWorkers[i];
+      if (worker) {
+        this.terminateWorker(`layout-${i}`, worker); // Pass a unique identifier if needed by terminateWorker
+      }
+    }
+    this.layoutWorkers = [];
+    this.layoutWorkerPromises = [];
+
+    // Terminate other single workers
     this.terminateWorker('color', this.colorExtractorWorker);
     this.colorExtractorWorker = null;
     this.colorExtractorWorkerPromise = null;
@@ -502,7 +615,8 @@ class WorkerPool {
     // Cleanup Image Processor
     if (this.imageProcessor) {
       console.log('WorkerPool: Cleaning up Image Processor...');
-      this.imageProcessor.terminate?.();
+      // Explicitly cast to ImageProcessor if type inference is failing
+      (this.imageProcessor as any).terminate?.(); // Or (this.imageProcessor as ImageProcessor).terminate?.(); if ImageProcessor type is imported
       this.imageProcessor = null;
     }
 
@@ -514,9 +628,16 @@ class WorkerPool {
     console.log('WorkerPool: Cleanup complete.');
   }
 
-  private terminateWorker(workerType: WorkerType, worker: WorkerInstance | null) {
+  private terminateWorker(workerType: WorkerType | string, worker: WorkerInstance | null) {
     if (worker) {
       console.log(`WorkerPool: Terminating ${workerType} worker...`);
+      const existingTimer = this.workerIdleTimers.get(worker);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.workerIdleTimers.delete(worker);
+      }
+      this.workerLastActivity.delete(worker); // Also clear last activity record
+
       try {
         worker.terminate();
       } catch (e) {
@@ -531,6 +652,71 @@ class WorkerPool {
     this.cancelPendingLayoutTasks(true);
     this.cancelPendingColorTasks(true);
     this.cancelPendingGroupingTasks(true);
+  }
+
+  // --- Idle Worker Termination Logic --- >
+  private scheduleGenericIdleCheck(worker: WorkerInstance, workerType: WorkerType | string): void {
+    const existingTimer = this.workerIdleTimers.get(worker);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    this.workerLastActivity.set(worker, Date.now());
+    // console.log(`[WorkerPool] Scheduling idle check for ${workerType} worker.`);
+
+    const timerId = setTimeout(() => {
+      // Check if still idle: compare lastActivityTime with current time
+      const lastActive = this.workerLastActivity.get(worker);
+      if (lastActive && Date.now() - lastActive >= WorkerPool.DEFAULT_IDLE_TIMEOUT_MS - 500) {
+        // -500ms tolerance
+        console.log(`[WorkerPool] Worker ${workerType} instance idle timeout. Terminating.`);
+        this.terminateGenericIdleWorker(worker, workerType);
+      } else if (lastActive) {
+        // Reschedule if it became active briefly or timer fired too early
+        // console.log(`[WorkerPool] Worker ${workerType} was active recently or timer misfired. Rescheduling.`);
+        this.scheduleGenericIdleCheck(worker, workerType);
+      } else {
+        // No last activity, but timer fired? Should be rare. Terminate to be safe.
+        console.warn(
+          `[WorkerPool] Worker ${workerType} timer fired without last activity. Terminating.`
+        );
+        this.terminateGenericIdleWorker(worker, workerType);
+      }
+    }, WorkerPool.DEFAULT_IDLE_TIMEOUT_MS);
+    this.workerIdleTimers.set(worker, timerId);
+  }
+
+  private terminateGenericIdleWorker(
+    worker: WorkerInstance,
+    workerType: WorkerType | string
+  ): void {
+    console.log(`[WorkerPool] Attempting to terminate idle worker: ${workerType}`);
+
+    // Call existing terminateWorker which handles worker.terminate() and cleans its own idle timer parts
+    this.terminateWorker(workerType, worker);
+
+    // Nullify the main reference to this worker instance and its promise
+    // This allows re-initialization on next demand
+    if (workerType === 'color' && this.colorExtractorWorker === worker) {
+      this.colorExtractorWorker = null;
+      this.colorExtractorWorkerPromise = null;
+      console.log(`[WorkerPool] ColorExtractorWorker instance nulled out.`);
+    } else if (workerType === 'grouping' && this.groupingWorker === worker) {
+      this.groupingWorker = null;
+      this.groupingWorkerPromise = null;
+      console.log(`[WorkerPool] GroupingWorker instance nulled out.`);
+    } else {
+      // Check if it's a layout worker from the pool
+      const layoutWorkerIndex = this.layoutWorkers.indexOf(worker as LayoutWorkerInstance);
+      if (layoutWorkerIndex !== -1) {
+        // @ts-ignore
+        this.layoutWorkers[layoutWorkerIndex] = null;
+        this.layoutWorkerPromises[layoutWorkerIndex] = null;
+        console.log(`[WorkerPool] LayoutWorker instance at index ${layoutWorkerIndex} nulled out.`);
+      } else {
+        console.warn(`[WorkerPool] Could not find worker to nullify for type: ${workerType}`);
+      }
+    }
   }
 }
 

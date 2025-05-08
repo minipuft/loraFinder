@@ -46,3 +46,7 @@ dist/client/workers/imageProcessorWorker.BHWxsclw.js
 dist/client/workers/imageProcessorWorker.BHWxsclw.js.map
 dist/server/entry-server.js
 dist/server/entry-server.js.map
+
+
+#Ignore cursor AI rules
+.cursor\rules\codacy.mdc

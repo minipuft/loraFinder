@@ -42,8 +42,15 @@ const getDb = (): Promise<IDBPDatabase> => {
 };
 
 class ImageProcessor {
-  private worker: Worker;
-  private proxy: Remote<ImageProcessorWorkerAPI>; // Store the Comlink proxy
+  private workers: Worker[] = []; // Changed from single worker
+  private proxies: Remote<ImageProcessorWorkerAPI>[] = []; // Changed from single proxy
+  private nextWorkerIndex = 0; // For round-robin proxy selection
+  private poolSize = 0; // To store the calculated pool size
+
+  private idleTimers = new Map<Worker, NodeJS.Timeout>();
+  private lastActivityTime = new Map<Worker, number>();
+  private static readonly IDLE_TIMEOUT_MS = 30000; // 30 seconds
+
   private queue: PQueue; // Add queue instance
   private onError?: (id: string, error: string) => void;
   // Store AbortControllers for active requests
@@ -54,31 +61,110 @@ class ImageProcessor {
   constructor(options?: ImageProcessorOptions) {
     this.onError = options?.onError;
 
-    // Initialize the queue
+    // Initialize the queue and determine pool size
     const concurrency =
       options?.concurrency ?? Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
-    this.queue = new PQueue({ concurrency });
-    console.log(`ImageProcessor: Initialized queue with concurrency ${concurrency}`);
+    this.poolSize = concurrency; // poolSize is the same as queue concurrency for now
+    this.queue = new PQueue({ concurrency: this.poolSize }); // Queue concurrency matches pool size
 
-    // Initialize the worker and wrap it with Comlink
-    this.worker = new Worker(new URL('./imageProcessorWorker.worker.ts', import.meta.url), {
-      type: 'module',
-    });
-    this.proxy = wrap<ImageProcessorWorkerAPI>(this.worker);
+    console.log(
+      `ImageProcessor: Initialized with worker pool size ${this.poolSize} and queue concurrency ${this.queue.concurrency}`
+    );
 
-    // Remove the onmessage handler - results come via promise
-    // this.worker.onmessage = (event: MessageEvent<ImageProcessorMessage>) => {
-    //   this.handleWorkerMessage(event);
-    // };
-
-    this.worker.onerror = error => {
-      console.error('Unhandled error in ImageProcessorWorker:', error);
-      // This usually indicates a setup or non-recoverable worker error
-      // Consider notifying the UI about a general failure
-      this.onError?.('WORKER_FATAL', error.message || 'Worker failed');
-    };
+    // Initialize the worker pool
+    for (let i = 0; i < this.poolSize; i++) {
+      this.initializeWorkerAtIndex(i);
+    }
 
     this.initializeCacheCheck();
+  }
+
+  private initializeWorkerAtIndex(index: number): void {
+    if (this.workers[index] || this.proxies[index]) {
+      console.warn(
+        `ImageProcessor: Worker at index ${index} already initialized or partially initialized. Skipping.`
+      );
+      return;
+    }
+    const worker = new Worker(new URL('./imageProcessorWorker.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    this.workers[index] = worker;
+    this.proxies[index] = wrap<ImageProcessorWorkerAPI>(worker);
+    console.log(`ImageProcessor: Initialized worker instance ${index + 1}/${this.poolSize}.`);
+
+    worker.onerror = error => {
+      console.error(`Unhandled error in ImageProcessorWorker[${index}]:`, error);
+      this.onError?.(
+        `WORKER_FATAL_INSTANCE_${index}`,
+        error.message || `Worker instance ${index} failed`
+      );
+      // Consider this worker dead, try to clean it up from the pool
+      this.terminateSpecificWorker(worker, index, true);
+    };
+  }
+
+  private scheduleIdleCheck(workerInstance: Worker, workerIndex: number): void {
+    const existingTimer = this.idleTimers.get(workerInstance);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    this.lastActivityTime.set(workerInstance, Date.now());
+
+    const timerId = setTimeout(() => {
+      console.log(`ImageProcessor: Worker instance ${workerIndex} idle timeout. Terminating.`);
+      this.terminateSpecificWorker(workerInstance, workerIndex);
+    }, ImageProcessor.IDLE_TIMEOUT_MS);
+    this.idleTimers.set(workerInstance, timerId);
+  }
+
+  private terminateSpecificWorker(
+    workerInstance: Worker,
+    index: number,
+    dueToError: boolean = false
+  ): void {
+    if (!this.workers[index] && !this.proxies[index] && !dueToError) {
+      // If already gone and not an error call, nothing to do
+      if (!dueToError)
+        console.log(`ImageProcessor: Worker ${index} already terminated or not found.`);
+      return;
+    }
+    console.log(
+      `ImageProcessor: Terminating worker instance ${index}. Due to error: ${dueToError}`
+    );
+
+    const proxy = this.proxies[index];
+    if (proxy) {
+      try {
+        proxy[Comlink.releaseProxy]();
+      } catch (e) {
+        console.warn(`ImageProcessor: Error releasing Comlink proxy for worker ${index}:`, e);
+      }
+    }
+
+    if (this.workers[index]) {
+      // Check if worker exists before trying to terminate
+      try {
+        this.workers[index].terminate();
+      } catch (e) {
+        console.warn(`ImageProcessor: Error terminating worker ${index}:`, e);
+      }
+    }
+
+    // Mark slot as empty for re-initialization
+    // @ts-ignore
+    this.workers[index] = null;
+    // @ts-ignore
+    this.proxies[index] = null;
+
+    const timer = this.idleTimers.get(workerInstance);
+    if (timer) {
+      clearTimeout(timer);
+      this.idleTimers.delete(workerInstance);
+    }
+    this.lastActivityTime.delete(workerInstance);
+    console.log(`ImageProcessor: Worker instance ${index} terminated and slot cleared.`);
   }
 
   private async initializeCacheCheck() {
@@ -216,6 +302,8 @@ class ImageProcessor {
           `ImageProcessor: Starting queued task for ${id}. Queue size: ${this.queue.size}`
         );
         let createdBitmap: ImageBitmap | null = null;
+        let workerIndex = -1; // Declare workerIndex here to be accessible in finally
+
         try {
           // Re-check cache inside queue in case it was populated while waiting
           const cachedEntry = await this.getCacheEntry(id);
@@ -253,6 +341,40 @@ class ImageProcessor {
           // Check signal before potentially long operations
           if (controller.signal.aborted)
             throw new DOMException('Aborted before processing', 'AbortError');
+
+          // --- Select Worker Proxy ---
+          workerIndex = this.nextWorkerIndex;
+          this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.poolSize;
+
+          // Ensure worker for this slot is initialized
+          if (!this.workers[workerIndex] || !this.proxies[workerIndex]) {
+            console.log(
+              `ImageProcessor: Worker at index ${workerIndex} was terminated or not initialized. Re-initializing.`
+            );
+            this.initializeWorkerAtIndex(workerIndex);
+            // Check again after attempting initialization
+            if (!this.workers[workerIndex] || !this.proxies[workerIndex]) {
+              console.error(
+                `ImageProcessor: Failed to re-initialize worker at index ${workerIndex} for ${id}.`
+              );
+              this.onError?.(
+                id,
+                `Failed to get worker at index ${workerIndex} after re-initialization attempt.`
+              );
+              this.activeRequests.delete(id); // Clean up active request map
+              return; // Cannot proceed
+            }
+          }
+
+          const selectedWorker = this.workers[workerIndex];
+          const selectedProxy = this.proxies[workerIndex];
+
+          // Clear idle timer for the selected worker as it's about to become active
+          const existingTimer = this.idleTimers.get(selectedWorker);
+          if (existingTimer) {
+            clearTimeout(existingTimer);
+            this.idleTimers.delete(selectedWorker);
+          }
 
           // --- Prepare / Fetch Bitmap (same logic as before) ---
           let reason = 'No cache entry';
@@ -299,11 +421,11 @@ class ImageProcessor {
           if (controller.signal.aborted)
             throw new DOMException('Aborted before worker call', 'AbortError');
           console.log(
-            `ImageProcessor: Sending image ${id} to worker via Comlink (queued). Reason: ${reason}`
+            `ImageProcessor: Sending image ${id} to worker instance ${workerIndex} via Comlink (queued). Reason: ${reason}`
           );
-          const result = await this.proxy.processImage(
+          const result = await selectedProxy.processImage(
             Comlink.transfer(
-              { id, imageBitmap: createdBitmap, width, height /* signal: controller.signal */ },
+              { id, imageBitmap: createdBitmap, width, height, signal: controller.signal },
               [createdBitmap]
             )
           );
@@ -366,8 +488,12 @@ class ImageProcessor {
               console.warn(`Error closing untransferred bitmap for ${id} (queued):`, e);
             }
           }
-          // Remove from active requests only when the queued task finishes/errors/aborts
           this.activeRequests.delete(id);
+          // Schedule idle check for the worker that just finished
+          if (this.workers[workerIndex]) {
+            // Check if worker still exists (wasn't terminated by error)
+            this.scheduleIdleCheck(this.workers[workerIndex], workerIndex);
+          }
           console.log(
             `ImageProcessor: Finished queued task for ${id}. Queue size: ${this.queue.size}`
           );
@@ -413,6 +539,7 @@ class ImageProcessor {
         const preCheckPromises: Promise<void>[] = [];
         const createdBitmaps: ImageBitmap[] = [];
         let batchError: Error | null = null; // Track error within the queued task
+        let batchWorkerIndex = -1; // Declare batchWorkerIndex here
 
         try {
           console.log(
@@ -448,22 +575,25 @@ class ImageProcessor {
                   ) {
                     if (controller.signal.aborted) return;
                     // Publish low-res from cache
-                    this.publisher?.({
+                    const lowResUpdate: ProcessedImageUpdate = {
                       id,
                       quality: 'low',
                       imageUrl: cachedEntry.lowResUrl,
                       width: cachedEntry.lowResWidth!,
                       height: cachedEntry.lowResHeight!,
-                    });
+                    };
+                    this.publisher?.(lowResUpdate);
+
                     // Publish high-res from cache
-                    this.publisher?.({
+                    const highResUpdate: ProcessedImageUpdate = {
                       id,
                       quality: 'high',
                       imageUrl: cachedEntry.highResUrl,
                       width: cachedEntry.width!,
                       height: cachedEntry.height!,
-                    });
-                    return;
+                    };
+                    this.publisher?.(highResUpdate);
+                    return; // Already cached, no need to queue
                   }
 
                   if (cachedEntry && (!lowResMatches || !highResMatches)) {
@@ -489,16 +619,17 @@ class ImageProcessor {
                   if (cachedEntry?.lowResUrl && lowResMatches) {
                     if (controller.signal.aborted) return;
                     // Publish low-res from cache
-                    this.publisher?.({
+                    const lowResUpdate: ProcessedImageUpdate = {
                       id,
                       quality: 'low',
                       imageUrl: cachedEntry.lowResUrl,
                       width: cachedEntry.lowResWidth!,
                       height: cachedEntry.lowResHeight!,
-                    });
+                    };
+                    this.publisher?.(lowResUpdate);
                   }
                 } catch (error: any) {
-                  if (localBitmap) {
+                  if (localBitmap && typeof localBitmap.close === 'function') {
                     try {
                       localBitmap.close();
                     } catch {}
@@ -528,82 +659,156 @@ class ImageProcessor {
             throw new DOMException('Batch preparation aborted', 'AbortError');
           }
 
-          // --- Call Worker ---
-          if (imagesToProcess.length > 0) {
-            console.log(
-              `ImageProcessor: Sending batch ${batchId} of ${imagesToProcess.length} images to worker via Comlink (queued).`
-            );
-            const batchResults = await this.proxy.processBatch(
-              Comlink.transfer(
-                { images: imagesToProcess /* signal: controller.signal */ },
-                transferList
-              )
-            );
+          // --- Select Worker Proxy for Batch ---
+          batchWorkerIndex = this.nextWorkerIndex;
+          this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.poolSize;
 
-            // --- Process Results ---
-            if (controller.signal.aborted) {
-              console.log(
-                `ImageProcessor: Batch ${batchId} aborted after worker completed (queued).`
+          // Ensure worker for this slot is initialized
+          if (!this.workers[batchWorkerIndex] || !this.proxies[batchWorkerIndex]) {
+            console.log(
+              `ImageProcessor: Worker at index ${batchWorkerIndex} for batch was terminated or not initialized. Re-initializing.`
+            );
+            this.initializeWorkerAtIndex(batchWorkerIndex);
+            if (!this.workers[batchWorkerIndex] || !this.proxies[batchWorkerIndex]) {
+              console.error(
+                `ImageProcessor: Failed to re-initialize worker at index ${batchWorkerIndex} for batch ${batchId}.`
               );
-              batchResults.forEach(r => {
-                if (r.lowResUrl) URL.revokeObjectURL(r.lowResUrl);
-                if (r.highResUrl) URL.revokeObjectURL(r.highResUrl);
+              this.onError?.(
+                batchId,
+                `Failed to get worker at index ${batchWorkerIndex} for batch after re-initialization attempt.`
+              );
+              this.activeRequests.delete(batchId); // Clean up active request map
+              // Ensure createdBitmaps are closed if we abort here, as they won't be transferred.
+              createdBitmaps.forEach(bmp => {
+                try {
+                  bmp.close();
+                } catch (e) {}
               });
-              // Still need to throw abort error to trigger finally cleanup correctly
-              throw new DOMException('Batch aborted post-worker', 'AbortError');
+              throw new Error(
+                `Failed to re-initialize worker for batch at index ${batchWorkerIndex}`
+              ); // Propagate error to queue
             }
+          }
 
-            console.log(
-              `ImageProcessor: Received ${batchResults.length} results for batch ${batchId} (queued).`
-            );
-            const cacheUpdatePromises: Promise<void>[] = [];
-            for (const result of batchResults) {
-              const { id: resultId, lowResUrl, highResUrl } = result;
-              const originalItem = imagesToProcess.find(item => item.id === resultId);
-              const originalWidth = originalItem?.width;
-              const originalHeight = originalItem?.height;
+          const selectedBatchWorker = this.workers[batchWorkerIndex];
+          const selectedBatchProxy = this.proxies[batchWorkerIndex];
 
-              if (!originalWidth || !originalHeight) continue;
-              const existingEntry = await this.getCacheEntry(resultId);
-              const finalEntry: ProcessedImageCacheEntry = {
-                id: resultId,
-                lowResUrl: result.lowResUrl ?? existingEntry?.lowResUrl,
-                lowResWidth: result.lowResUrl
-                  ? Math.round(originalWidth / 4)
-                  : existingEntry?.lowResWidth,
-                lowResHeight: result.lowResUrl
-                  ? Math.round(originalHeight / 4)
-                  : existingEntry?.lowResHeight,
-                highResUrl: result.highResUrl ?? existingEntry?.highResUrl,
-                width: result.highResUrl ? originalWidth : existingEntry?.width,
-                height: result.highResUrl ? originalHeight : existingEntry?.height,
-                timestamp: Date.now(),
-              };
-              cacheUpdatePromises.push(this.setCacheEntry(finalEntry));
-              // Publish results using the publisher function
-              if (result.lowResUrl) {
-                this.publisher?.({
-                  id: resultId,
-                  quality: 'low',
-                  imageUrl: finalEntry.lowResUrl!,
-                  width: finalEntry.lowResWidth!,
-                  height: finalEntry.lowResHeight!,
+          // Clear idle timer for the selected worker
+          const existingBatchTimer = this.idleTimers.get(selectedBatchWorker);
+          if (existingBatchTimer) {
+            clearTimeout(existingBatchTimer);
+            this.idleTimers.delete(selectedBatchWorker);
+          }
+
+          let batchResults = [];
+          try {
+            if (imagesToProcess.length > 0) {
+              console.log(
+                `ImageProcessor: Sending batch ${batchId} of ${imagesToProcess.length} images to worker instance ${batchWorkerIndex} via Comlink (queued).`
+              );
+              batchResults = await selectedBatchProxy.processBatch(
+                Comlink.transfer(
+                  { images: imagesToProcess, signal: controller.signal },
+                  transferList
+                )
+              );
+
+              // --- Process Results ---
+              if (controller.signal.aborted) {
+                console.log(
+                  `ImageProcessor: Batch ${batchId} aborted after worker completed (queued).`
+                );
+                batchResults.forEach(r => {
+                  if (r.lowResUrl) URL.revokeObjectURL(r.lowResUrl);
+                  if (r.highResUrl) URL.revokeObjectURL(r.highResUrl);
                 });
+                // Still need to throw abort error to trigger finally cleanup correctly
+                throw new DOMException('Batch aborted post-worker', 'AbortError');
               }
-              if (result.highResUrl) {
-                this.publisher?.({
+
+              console.log(
+                `ImageProcessor: Received ${batchResults.length} results for batch ${batchId} (queued).`
+              );
+              const cacheUpdatePromises: Promise<void>[] = [];
+              for (const result of batchResults) {
+                const { id: resultId, lowResUrl, highResUrl } = result;
+                const originalItem = imagesToProcess.find(item => item.id === resultId);
+                const originalWidth = originalItem?.width;
+                const originalHeight = originalItem?.height;
+
+                if (!originalWidth || !originalHeight) continue;
+                const existingEntry = await this.getCacheEntry(resultId);
+                const finalEntry: ProcessedImageCacheEntry = {
                   id: resultId,
-                  quality: 'high',
-                  imageUrl: finalEntry.highResUrl!,
-                  width: finalEntry.width!,
-                  height: finalEntry.height!,
-                });
+                  lowResUrl: result.lowResUrl ?? existingEntry?.lowResUrl,
+                  lowResWidth: result.lowResUrl
+                    ? Math.round(originalWidth / 4)
+                    : existingEntry?.lowResWidth,
+                  lowResHeight: result.lowResUrl
+                    ? Math.round(originalHeight / 4)
+                    : existingEntry?.lowResHeight,
+                  highResUrl: result.highResUrl ?? existingEntry?.highResUrl,
+                  width: result.highResUrl ? originalWidth : existingEntry?.width,
+                  height: result.highResUrl ? originalHeight : existingEntry?.height,
+                  timestamp: Date.now(),
+                };
+                cacheUpdatePromises.push(this.setCacheEntry(finalEntry));
+                // Publish results using the publisher function
+                if (result.lowResUrl) {
+                  this.publisher?.({
+                    id: resultId,
+                    quality: 'low',
+                    imageUrl: finalEntry.lowResUrl!,
+                    width: finalEntry.lowResWidth!,
+                    height: finalEntry.lowResHeight!,
+                  });
+                }
+                if (result.highResUrl) {
+                  this.publisher?.({
+                    id: resultId,
+                    quality: 'high',
+                    imageUrl: finalEntry.highResUrl!,
+                    width: finalEntry.width!,
+                    height: finalEntry.height!,
+                  });
+                }
               }
+              await Promise.all(cacheUpdatePromises);
+            } else {
+              console.log(
+                `ImageProcessor: No images needed processing for batch ${batchId} (queued).`
+              );
             }
-            await Promise.all(cacheUpdatePromises);
-          } else {
+          } catch (error: any) {
+            batchError = error; // Store error to handle in finally
+            if (error.name === 'AbortError') {
+              console.log(`ImageProcessor: Queued batch ${batchId} processing aborted.`);
+            } else {
+              console.error(`ImageProcessor: Error processing queued batch ${batchId}:`, error);
+              this.onError?.(batchId, error.message || 'Queued batch processing failed');
+            }
+          } finally {
+            // Ensure bitmaps not transferred are closed if aborted/errored during prep
+            // Also close bitmaps if a non-abort error occurred after prep
+            if (batchError?.name === 'AbortError' || batchError) {
+              createdBitmaps.forEach(bitmap => {
+                // Check if it was actually transferred before trying to close
+                if (!transferList.includes(bitmap)) {
+                  try {
+                    bitmap.close();
+                  } catch {}
+                }
+              });
+            }
+            // Worker handles closing transferred bitmaps
+            this.activeRequests.delete(batchId);
+            // Schedule idle check for the worker that just finished this batch
+            if (this.workers[batchWorkerIndex]) {
+              // Check if worker still exists
+              this.scheduleIdleCheck(this.workers[batchWorkerIndex], batchWorkerIndex);
+            }
             console.log(
-              `ImageProcessor: No images needed processing for batch ${batchId} (queued).`
+              `ImageProcessor: Finished queued batch task ${batchId}. Queue size: ${this.queue.size}`
             );
           }
         } catch (error: any) {
@@ -614,24 +819,6 @@ class ImageProcessor {
             console.error(`ImageProcessor: Error processing queued batch ${batchId}:`, error);
             this.onError?.(batchId, error.message || 'Queued batch processing failed');
           }
-        } finally {
-          // Ensure bitmaps not transferred are closed if aborted/errored during prep
-          // Also close bitmaps if a non-abort error occurred after prep
-          if (batchError?.name === 'AbortError' || batchError) {
-            createdBitmaps.forEach(bitmap => {
-              // Check if it was actually transferred before trying to close
-              if (!transferList.includes(bitmap)) {
-                try {
-                  bitmap.close();
-                } catch {}
-              }
-            });
-          }
-          // Worker handles closing transferred bitmaps
-          this.activeRequests.delete(batchId);
-          console.log(
-            `ImageProcessor: Finished queued batch task ${batchId}. Queue size: ${this.queue.size}`
-          );
         }
       })
       .catch(error => {
@@ -664,31 +851,48 @@ class ImageProcessor {
       this.queue.clear();
       // Clear the tracking map
       this.activeRequests.clear();
+      // Clear all idle timers as well
+      this.idleTimers.forEach(timerId => clearTimeout(timerId));
+      this.idleTimers.clear();
+      this.lastActivityTime.clear();
     }
   }
 
   cancelAll() {
     this.cancel(); // cancel() without id now handles clearing everything
-  }
 
-  terminate() {
-    console.log(
-      'ImageProcessor: Terminating worker, cancelling active requests, clearing queue, and closing DB.'
-    );
-    this.cancelAll(); // Abort ongoing and clear pending
-    // Add a small delay to allow abort signals to propagate potentially?
-    // setTimeout(() => {...
+    // Clear all idle timers before attempting to terminate workers
+    this.idleTimers.forEach(timerId => clearTimeout(timerId));
+    this.idleTimers.clear();
+    this.lastActivityTime.clear();
+
     try {
-      this.proxy[Comlink.releaseProxy]();
+      // Release Comlink proxies first
+      for (const proxy of this.proxies) {
+        try {
+          proxy[Comlink.releaseProxy]();
+        } catch (e) {
+          console.warn('ImageProcessor: Error releasing a Comlink proxy:', e);
+        }
+      }
+      // Terminate workers
+      for (const worker of this.workers) {
+        try {
+          worker.terminate();
+        } catch (e) {
+          console.warn('ImageProcessor: Error terminating a worker:', e);
+        }
+      }
     } catch (e) {
-      console.warn('ImageProcessor: Error releasing Comlink proxy:', e);
+      console.warn('ImageProcessor: Error during bulk proxy/worker termination:', e);
     }
-    this.worker.terminate();
+    this.proxies = [];
+    this.workers = [];
+
     if (dbPromise) {
       getDb().then(db => db.close());
       dbPromise = null;
     }
-    // }, 50); // Example delay
   }
 }
 
