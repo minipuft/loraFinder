@@ -1,4 +1,4 @@
-import { motion, useAnimation } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useState } from 'react';
 import styles from '../styles/SearchBar.module.scss';
 
@@ -11,7 +11,7 @@ interface SearchBarProps {
 const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
   // State to manage the search query
   const [query, setQuery] = useState('');
-  const controls = useAnimation();
+  const [isFocused, setIsFocused] = useState(false);
 
   // Handler for form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -25,25 +25,19 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
       onSubmit={handleSubmit}
       className={styles.searchBarContainer}
       initial={{ width: '200px' }}
-      animate={{ width: query ? '300px' : '200px' }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      animate={{ width: query || isFocused ? '300px' : '200px' }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
     >
-      <motion.div
-        className={styles.searchBackground}
-        animate={{
-          background: query
-            ? 'linear-gradient(90deg, #4a00e0 0%, #8e2de2 100%)'
-            : 'rgba(255, 255, 255, 0.1)',
-        }}
-      />
+      <motion.div className={styles.searchBackground} />
       <motion.input
         type="text"
         value={query}
         onChange={e => setQuery(e.target.value)}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         className={styles.searchInput}
         placeholder="Search the future..."
-        whileFocus={{ scale: 1.05 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 20 }}
       />
     </motion.form>
   );

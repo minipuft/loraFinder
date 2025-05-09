@@ -12,13 +12,31 @@ To provide a fast, efficient, and visually appealing web application for managin
 ## 2. Main Goals
 
 - **Efficient Image Browsing:** Allow users to quickly navigate through hierarchical folder structures and view image thumbnails.
-- **High-Performance Viewing:** Implement fast loading times using modern web technologies, SSR, caching, and lazy loading.
-- **Advanced Search:** Enable users to find specific images using full-text search across metadata or filenames.
-- **Robust Backend:** Utilize a stable Express backend for reliable file system interaction and image processing.
+- **High-Performance Viewing:** Implement fast loading times using modern web technologies, SSR, caching, and lazy loading. Key technologies include Vite, React Query, and Web Workers.
+- **Advanced Search:** Enable users to find specific images using full-text search across metadata or filenames, powered by backend API endpoints like `src/api/search.ts`.
+- **Robust Backend:** Utilize a stable Express backend (orchestrated by `server.ts`) for reliable file system interaction and image processing (e.g., using Sharp).
 - **Developer Experience:** Maintain a clean, well-structured codebase using Vite, TypeScript, and modern React practices.
-- **Adaptive Scroll Prefetching:** Proactively prefetch images near the viewport using the `usePrefetchManager` hook with priority-based selection for smoother scrolling experiences.
-- **Dynamic Animations:** Provide context-driven animations for page transitions, interactions, and scroll-based effects using a GSAP-powered animation pipeline.
+- **Adaptive Scroll Prefetching:** Proactively prefetch images near the viewport using the `usePrefetchManager` hook (defined in `src/hooks/usePrefetchManager.ts`) with priority-based selection for smoother scrolling experiences.
+- **Dynamic Animations:** Provide context-driven animations for page transitions, interactions, and scroll-based effects. The system is centered around `AnimationPipeline` instances (from `src/animations/AnimationPipeline.ts`), typically managed by the `AnimationManagerProvider` (`src/animations/AnimationManager.tsx`) and its `useAnimationPipeline` hook. This setup supports reusable animation `presets` (located in `src/animations/presets/`). Event-based orchestration of these pipelines is facilitated by `AnimationControllerContext` (`src/contexts/AnimationControllerContext.tsx`).
+- **Efficient Worker Usage**: Leverage Web Workers for background tasks such as image processing, layout calculations, and animation coordination. Key files include `src/workers/workerPool.ts` for managing pooled workers, and Comlink-based workers like `src/workers/animationCoordinator.worker.ts` and `src/workers/imageProcessorWorker.worker.ts`.
 
 ## 3. High-Level Explanation
 
-MediaFlow is a full-stack application combining a React frontend (built with Vite and utilizing SSR) and an Express backend. The frontend handles user interaction, displaying folders and images in a responsive masonry layout, leveraging React Query for data fetching. A centralized animation pipeline is implemented via `AnimationSystem` (`src/utils/AnimationSystem.ts`) and orchestrated through `AnimationControllerContext` to trigger animations (e.g., `pageEnter`, hover, morph, and scroll effects`) declaratively across components. The backend interacts with the file system specified by the `MAIN_DIRECTORY` environment variable, serves API endpoints for image and folder data, performs image processing using Sharp, and handles SSR requests.
+MediaFlow is a full-stack application combining a React frontend and an Express backend, with Vite serving as the build tool and development server for both.
+
+**Backend (Entry: `server.ts`):**
+The Express server is responsible for:
+- Serving API endpoints that provide data for folders (e.g., `src/api/folders.ts`), images (e.g., `src/api/images.ts`, `src/api/image/[...params].ts`), search functionality (`src/api/search.ts`), and file uploads (`src/api/upload.ts`).
+- Interacting with the server's file system, based on the `MAIN_DIRECTORY` environment variable.
+- Performing server-side image processing tasks using the Sharp library.
+- Handling Server-Side Rendering (SSR) by utilizing Vite's SSR capabilities to load the client application via `src/entry-server.tsx` and stream the rendered HTML to the client.
+
+**Frontend (Client Entry: `src/main.tsx`):**
+The React application, with its routing managed by `src/routes/AppRouter.tsx`, handles:
+- All user interactions, including displaying folder structures and image galleries, often utilizing a responsive masonry layout.
+- Client-side data fetching, caching, and state synchronization via React Query, with its core setup in `src/lib/queryClient/index.ts`.
+- Application-wide state management through various React Context providers (e.g., `ImageProcessingProvider` from `src/contexts/ImageProcessingContext.tsx`, `ColorProvider` from `src/contexts/ColorContext.tsx`).
+- A sophisticated animation system powered by GSAP. `AnimationPipeline` instances form the core, managed by `AnimationManagerProvider` (`src/animations/AnimationManager.tsx`). The `AnimationControllerContext` allows for these pipelines to be triggered by application-wide events. Reusable animation definitions are stored in `src/animations/presets/`.
+- Offloading computationally intensive tasks to Web Workers. This includes layout calculations (`src/workers/layoutWorker.worker.ts`), image processing (`src/workers/imageProcessorWorker.worker.ts`), and animation sequencing (`src/workers/animationCoordinator.worker.ts`). The `src/workers/workerPool.ts` is a key component for managing some of these worker resources.
+
+The application is architected for high performance, utilizing techniques like SSR, Vite-powered code splitting and lazy loading, efficient data fetching with React Query, and background processing via Web Workers. Global application styles are defined in `src/styles/globals.scss`, supplemented by component-specific SCSS modules for encapsulated styling.

@@ -1,0 +1,85 @@
+.zoomSliderContainer {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm); // Compact padding
+  width: 150px; // Define a compact width, can be adjusted
+  height: 100%; // Fill the height of the menu item it's in
+  background-color: rgba(var(--theme-background-dark-rgb, 22, 22, 30), 0.85);
+  border-radius: var(--rounded-md); // Match other elements if possible
+  gap: var(--spacing-sm);
+}
+
+.zoomRangeInput {
+  flex-grow: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px; // Slim track
+  background: rgba(var(--theme-primary-rgb, 122, 162, 247), 0.2);
+  border-radius: var(--rounded-sm);
+  outline: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: rgba(var(--theme-primary-rgb, 122, 162, 247), 0.3);
+  }
+
+  // Thumb styles for WebKit browsers (Chrome, Safari, Edge)
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; // Thumb size
+    height: 14px;
+    background: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.9);
+    border-radius: 50%;
+    border: 1px solid rgba(var(--theme-background-dark-rgb, 22, 22, 30), 0.5);
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.5);
+    transition: transform 0.1s ease;
+
+    &:active {
+      transform: scale(1.1);
+    }
+  }
+
+  // Thumb styles for Firefox
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.9);
+    border-radius: 50%;
+    border: 1px solid rgba(var(--theme-background-dark-rgb, 22, 22, 30), 0.5);
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.5);
+    transition: transform 0.1s ease;
+
+    &:active {
+      transform: scale(1.1);
+    }
+  }
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xxs);
+  background-color: transparent;
+  border: none;
+  color: rgba(var(--nexus-text-color, #ddeeff), 0.7);
+  cursor: pointer;
+  border-radius: var(--rounded-sm);
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+
+  &:hover {
+    color: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.9);
+    background-color: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.1);
+  }
+
+  &:active {
+    background-color: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.2);
+  }
+}

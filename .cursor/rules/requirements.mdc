@@ -25,7 +25,21 @@ alwaysApply: false
 ## Runtime Dependencies
 - **Express** ^4.19.2
 - **@tanstack/react-query** & **React** 18.x
+- **@tanstack/query-persist-client-core** ^5.75.0
+- **@tanstack/query-async-storage-persister** ^5.75.0
+- **@tanstack/react-query-persist-client** ^5.75.1
+- **@tanstack/react-virtual** ^3.13.6
+- **React Router DOM** ^6.30.0
 - **axios**, **dotenv**, **sharp**, **formidable**, **uuid**, **p-queue**
+- **comlink** ^4.4.2 (for Web Worker communication)
+- **idb** ^8.0.0 & **idb-keyval** ^6.2.1 (for client-side IndexedDB storage)
+- **lru-cache** ^11.1.0 (for server-side caching)
+- **Framer Motion** ^11.5.4 & **GSAP** ^3.12.5 (for animations)
+- **@dnd-kit/core** ^6.3.1, **@dnd-kit/sortable** ^10.0.0, **@dnd-kit/utilities** ^3.2.2 (for drag and drop)
+- **react-masonry-css** ^1.0.16
+- **react-slick** ^0.30.3 & **slick-carousel** ^1.8.1
+- **yet-another-react-lightbox** ^3.21.4
+- **fast-average-color** ^9.5.0
 - **workers** (Web Workers) for offloading client-side tasks
 - **Custom Hook `usePrefetchManager`** for efficient scroll-based image prefetch
 - **Utilities `MaxHeap` & `priorityCalculator`** for on-viewport priority selection

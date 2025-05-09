@@ -22,7 +22,7 @@ This document outlines the core features of the MediaFlow application.
 - **Lazy Loading:** Images are loaded progressively as the user scrolls to improve initial load time and performance.
 - **SSR (Server-Side Rendering):** Initial page loads are rendered on the server for faster perceived performance and better SEO.
 - **Image Processing:** The backend uses Sharp for potential image processing tasks (e.g., thumbnail generation, although specific implementation details should be verified).
-- **Caching:** Client-side (potentially IDB or memory) and server-side (Node Cache) caching mechanisms are likely used to speed up repeated data access.
+- **Caching:** Client-side (React Query with IDB persistence via `src/lib/queryClient/idbPersister.ts`, and specific caches like `src/lib/cache/feedStateCache.ts`) and server-side (`lru-cache` via `src/server/lib/cache/providers/lruCache.ts`) mechanisms are used to speed up repeated data access.
 
 ## 3. Search
 
@@ -32,9 +32,15 @@ This document outlines the core features of the MediaFlow application.
 ## 4. Performance & Optimization
 
 - **Vite Build System:** Utilizes Vite for fast development server startup and optimized production builds.
-- **React Query:** Manages server state, caching, and background updates efficiently on the client.
-- **Code Splitting:** Vite likely handles automatic code splitting for optimized JavaScript loading.
-- **Web Workers:** Potential use of web workers (`src/workers/`) for offloading intensive tasks (e.g., client-side processing if implemented).
+- **React Query:** Manages server state, caching (with IndexedDB persistence), and background updates efficiently on the client.
+- **Code Splitting:** Vite handles automatic code splitting for optimized JavaScript loading.
+- **Web Workers:** Extensive use of web workers (`src/workers/`) for offloading intensive tasks:
+    - `imageProcessorWorker.worker.ts` (Comlink-based, for image resizing/format conversion).
+    - `animationCoordinator.worker.ts` (Comlink-based, for sequencing complex animations).
+    - `layoutWorker.worker.ts` (for layout calculations).
+    - `groupingWorker.worker.ts` (for image grouping logic).
+    - `colorExtractor.worker.ts` (for extracting dominant colors).
+    - Managed by `src/workers/workerPool.ts` and potentially `src/workers/imageProcessor.ts`.
 - **Scroll Prefetch Optimization:** The `usePrefetchManager` hook (`src/hooks/usePrefetchManager.ts`) now uses a fixed-size max-heap (`src/utils/MaxHeap.ts`) with a distance-based priority calculation (`src/utils/priorityCalculator.ts`) to efficiently select and prefetch offscreen images based on proximity to the viewport.
 
 ## 5. Development & Tooling
@@ -47,12 +53,12 @@ This document outlines the core features of the MediaFlow application.
 
 ## 6. Animations
 
-- **Animation Pipeline:** Uses a centralized animation system (`src/utils/AnimationSystem.ts`) powered by GSAP and ScrollTrigger for hover, page-enter, morph, and scroll-based animations.
-- **Triggers & Context:** Animation triggers (e.g., `pageEnter`, custom events) are managed via `AnimationControllerContext` (`src/contexts/AnimationControllerContext.tsx`), enabling declarative animation control across components.
-- **Custom Eases & Scroll Animations:** Defines custom easing functions (`smoothOut`, `gentleIn`) and scroll-triggered animations via `ScrollTriggerManager`.
-- **Integration with UI:** Components use `useAnimationController` to trigger animations on lifecycle events or interactions.
-- **Performance Considerations:** Animations are managed off the main thread where possible and throttled/debounced to avoid layout thrashing.
-- **Grouping & Ungrouping Animations:** Implements a hybrid approach combining GSAP (`src/animations/GroupingAnimator.ts`) for piling cards into a deck and Framer Motion's `<AnimatePresence>` exit variants in `src/components/ImageRow.tsx` for spreading them back into the grid, coordinated by the unified effect in `src/components/ImageFeed.tsx`.
+- **Core Animation System:** Built around GSAP, with `AnimationPipeline` instances (`src/animations/AnimationPipeline.ts`) for orchestrating timelines. These pipelines are typically obtained and managed via the `useAnimationPipeline` hook provided by `AnimationManagerProvider` (`src/animations/AnimationManager.tsx`). The system supports reusable `presets` (from `src/animations/presets/`).
+- **Event-Driven Orchestration:** The `AnimationControllerContext` (`src/contexts/AnimationControllerContext.tsx`) allows `AnimationPipeline` instances to be registered and triggered in response to named application-wide events (e.g., `pageEnter`), enabling declarative control.
+- **Custom Eases & Scroll Animations:** Defines custom easing functions and utilizes `ScrollTriggerManager` (`src/utils/ScrollTriggerManager.ts`) for scroll-triggered effects, integrated with GSAP timelines.
+- **Integration with UI:** Components use `useAnimationPipeline` to get pipeline instances and `useAnimationController` to register for or trigger global animation events.
+- **Performance Considerations:** Animation logic can be offloaded to workers (e.g., `animationCoordinator.worker.ts`). Main-thread animations are optimized, and utilities like `throttleDebounce` (`src/utils/throttleDebounce.ts`) are available.
+- **Grouping & Ungrouping Animations:** Implements a hybrid approach combining GSAP (e.g., `src/animations/presets/GroupingAnimator.ts`) for piling cards into a deck and Framer Motion's `<AnimatePresence>` exit variants in `src/components/ImageRow.tsx` for spreading them back into the grid, coordinated by the unified effect in `src/components/ImageFeed.tsx`.
 - **Enhanced Drag & Drop (Image Feed):**
   - Utilizes `@dnd-kit` for robust drag-and-drop logic.
   - Integrates Framer Motion for smooth, animated item reordering (`layout` prop).
@@ -62,7 +68,7 @@ This document outlines the core features of the MediaFlow application.
 ## Edge Cases & Business Rules
 
 - **File Access:** The application only has access to files within the `MAIN_DIRECTORY` specified in the environment variables.
-- **Error Handling:** Robust error handling should be implemented for API requests, file system operations, and image processing.
+- **Error Handling:** Robust error handling should be implemented for API requests, file system operations, and image processing (e.g., using `src/utils/errorHandler.ts`).
 - **Security:** File uploads should be validated (e.g., file type, size limits). API endpoints should be secured against unauthorized access if applicable.
 - **Large Directories:** Performance considerations for very large directories or large numbers of images need to be addressed (e.g., pagination, efficient querying).
 - **Unsupported File Types:** How the application handles non-image files or unsupported image formats needs definition.

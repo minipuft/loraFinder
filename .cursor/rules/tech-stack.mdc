@@ -11,6 +11,8 @@ alwaysApply: true
 - **Vite** ^5.4.12 (development & build tool)
 - **Express** ^4.19.2 (backend framework)
 - **React** ^18.3.1 & **React DOM** ^18.3.1
+- **React Router DOM** ^6.30.0 (Client-side routing)
+- **Formidable** ^3.5.1 (Node.js module for parsing form data, especially file uploads)
 
 ## Styling
 - **Tailwind CSS** ^3.4.10
@@ -20,6 +22,8 @@ alwaysApply: true
 ## State & Data Fetching
 - **@tanstack/react-query** ^5.73.3 & **@tanstack/react-query-devtools** ^5.66.8
 - **@tanstack/query-persist-client-core** ^5.75.0
+- **@tanstack/query-async-storage-persister** ^5.75.0 (Async storage persister for React Query)
+- **@tanstack/react-query-persist-client** ^5.75.1 (React Query persistence wrapper)
 - **@tanstack/react-virtual** ^3.13.6
 - **Axios** ^1.7.5
 
@@ -29,9 +33,16 @@ alwaysApply: true
 - **GSAP** ^3.12.5
   - *Used for complex timeline-based animations, potentially grouped animations or scroll effects.*
 
+## UI Components & Interactions
+- **@dnd-kit/core** ^6.3.1, **@dnd-kit/sortable** ^10.0.0, **@dnd-kit/utilities** ^3.2.2 (Drag and drop toolkit)
+- **react-masonry-css** ^1.0.16 (Masonry grid layout)
+- **react-slick** ^0.30.3 & **slick-carousel** ^1.8.1 (Carousel component)
+- **yet-another-react-lightbox** ^3.21.4 (Image lightbox viewer)
+
 ## Utilities & Communication
 - **Comlink** ^4.4.2 (Web Worker RPC)
-- **idb** ^8.0.0 (IndexedDB)
+- **idb** ^8.0.0 (IndexedDB wrapper)
+- **idb-keyval** ^6.2.1 (Simple key-value store with IndexedDB)
 - **lru-cache** ^11.1.0 (server-side caching)
 - **p-queue** ^8.1.0 (task queue)
 - **dotenv** ^16.4.7 (environment variables)
@@ -39,8 +50,5 @@ alwaysApply: true
 - **UUID** ^11.1.0
 
 ## Image & Media
-- **Sharp** ^0.33.5 (image processing)
-- **Fast Average Color** ^9.5.0 (color extraction)
-- **react-masonry-css** ^1.0.16 (masonry grid layout)
-- **react-slick** ^0.30.3 & **slick-carousel** ^1.8.1 (carousel)
-- **yet-another-react-lightbox** ^3.21.4 (lightbox viewer)
+- **Sharp** ^0.33.5 (image processing on server)
+- **Fast Average Color** ^9.5.0 (color extraction from images)

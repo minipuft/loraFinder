@@ -1,0 +1,163 @@
+.menuItem {
+  position: absolute;
+  width: var(--nexus-orb-size, 40px); // Same size as the orb for consistency
+  height: var(--nexus-orb-size, 40px);
+  border-radius: 50%;
+  background-color: rgba(var(--theme-background-dark-rgb, 22, 22, 30), 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(var(--theme-primary-rgb, 122, 162, 247), 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  color: rgba(var(--theme-text-rgb, 220, 220, 220), 0.8);
+  transition:
+    transform 0.2s ease-out,
+    background-color 0.2s ease-out,
+    border-color 0.2s ease-out;
+
+  svg {
+    width: calc(var(--nexus-orb-size) * 0.5);
+    height: calc(var(--nexus-orb-size) * 0.5);
+    stroke-width: 1.5;
+  }
+
+  &:hover {
+    background-color: rgba(var(--theme-primary-rgb, 122, 162, 247), 0.3);
+    border-color: rgba(var(--theme-primary-rgb, 122, 162, 247), 0.8);
+    color: rgba(var(--theme-text-rgb, 255, 255, 255), 1);
+    transform: scale(1.1);
+  }
+
+  &.active {
+    background-color: rgba(var(--theme-primary-rgb, 122, 162, 247), 0.4);
+    border-color: rgba(var(--theme-primary-rgb, 122, 162, 247), 1);
+    color: rgba(var(--theme-text-rgb, 255, 255, 255), 1);
+    box-shadow: 0 0 10px rgba(var(--theme-primary-rgb, 122, 162, 247), 0.5);
+  }
+
+  &.searchInputMode {
+    // Potentially override some menuItem styles if needed when search is active
+    // For example, if it needs to be larger or have a different background principle
+    // background-color: transparent; // Example: ensure background is clean for input
+    // padding: 0; // Example: remove padding if input handles it
+  }
+
+  &.zoomSliderMode {
+    // Styles for when the zoom slider is active within this menu item
+    // For example, it might need to become wider to accommodate the slider
+    // width: 180px; // Example: if zoomSliderContainer is 150px + padding
+    // background-color: transparent; // If the slider has its own opaque background
+    // overflow: visible; // If the slider needs to visually break out a bit
+  }
+
+  // Tooltip for accessibility / label
+  .tooltip {
+    position: absolute;
+    bottom: 110%; // Position above the item
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(var(--theme-background-dark-rgb, 10, 10, 15), 0.9);
+    color: var(--nexus-text-color, white);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 0.2s ease,
+      visibility 0.2s ease;
+    pointer-events: none;
+  }
+
+  &:hover .tooltip {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.iconDisplayContainer {
+  display: flex; // To mimic original structure if icon and tooltip were flex items
+  flex-direction: column; // Or 'row' depending on original layout
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%; // Ensure it fills the animated motion.div
+}
+
+.searchInputContainer {
+  display: flex;
+  align-items: center;
+  width: 100%; // Occupy the item's space
+  height: 100%;
+  position: relative; // For positioning the close button
+}
+
+.searchInputField {
+  flex-grow: 1;
+  height: 100%;
+  padding: 0 var(--spacing-small); // Adjust as needed
+  padding-right: calc(var(--spacing-small) + 24px); // Space for close button
+  font-size: 0.9rem;
+  font-family: var(--font-mono); // Or a suitable futuristic font
+  color: var(--nexus-text-color, #ddeeff);
+  background-color: rgba(var(--theme-background-dark-rgb, 22, 22, 30), 0.7);
+  border: 1px solid rgba(var(--theme-primary-rgb, 122, 162, 247), 0.5);
+  border-radius: var(--rounded-md);
+  outline: none;
+  caret-color: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.9);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &::placeholder {
+    color: rgba(var(--nexus-text-color, #ddeeff), 0.5);
+    font-style: italic;
+  }
+
+  &:focus {
+    border-color: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.8);
+    box-shadow: 0 0 8px rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.5);
+  }
+}
+
+.searchCloseButton {
+  position: absolute;
+  right: var(--spacing-xs);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xxs);
+  background-color: transparent;
+  border: none;
+  color: rgba(var(--nexus-text-color, #ddeeff), 0.7);
+  cursor: pointer;
+  border-radius: var(--rounded-sm);
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+
+  &:hover {
+    color: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.9);
+    background-color: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.1);
+  }
+
+  &:active {
+    background-color: rgba(var(--theme-accent-cyan-rgb, 125, 223, 255), 0.2);
+  }
+}
+
+.zoomSliderWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%; // Take full width of the animated container
+  height: 100%; // Take full height
+  // This wrapper helps if the ZoomSliderControl itself has a fixed size
+  // and needs to be centered or positioned within the animated motion.div.
+}

@@ -178,7 +178,7 @@ const ImageRow: React.FC<ImageRowProps> = ({
         alignItems: 'stretch',
       }}
     >
-      <AnimatePresence initial={false} mode="sync" onExitComplete={onExitComplete}>
+      <AnimatePresence initial={false} mode="popLayout" onExitComplete={onExitComplete}>
         {images.map((image, index) => {
           const group = groupedImages.find(g => g.images.some(img => img.id === image.id));
           const width = imageWidths[index];
@@ -231,7 +231,7 @@ const ImageRow: React.FC<ImageRowProps> = ({
             rotate: (Math.random() - 0.5) * 15,
             transition: {
               duration: 0.4,
-              ease: 'power2.inOut',
+              ease: 'easeInOut',
               delay: index * 0.02,
             },
           };

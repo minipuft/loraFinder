@@ -16,7 +16,7 @@ const Home: React.FC = () => {
   const mainScrollRef = useRef<HTMLElement>(null);
   const layoutWrapperRef = useRef<HTMLDivElement>(null); // Ref for the outer wrapper div
   const sidebarRef = useRef<HTMLDivElement>(null); // Ref for Sidebar
-  const navbarRef = useRef<HTMLDivElement>(null); // Ref for Navbar
+  // const navbarRef = useRef<HTMLDivElement>(null); // Navbar is replaced by NexusOrb
   const contentAreaRef = useRef<HTMLDivElement>(null); // Ref for MainContent wrapper area
 
   // --- Animation Setup ---
@@ -29,7 +29,7 @@ const Home: React.FC = () => {
       homeEnterPipeline &&
       layoutWrapperRef.current &&
       sidebarRef.current &&
-      navbarRef.current &&
+      // navbarRef.current && // NexusOrb is not part of this initial fade-in sequence
       contentAreaRef.current
     ) {
       homeEnterPipeline.clear();
@@ -43,12 +43,6 @@ const Home: React.FC = () => {
         })
         .addStep({
           target: sidebarRef.current,
-          preset: 'fadeIn',
-          vars: { duration: 0.4 },
-          position: '+=0.2',
-        })
-        .addStep({
-          target: navbarRef.current,
           preset: 'fadeIn',
           vars: { duration: 0.4 },
           position: '+=0.2',
@@ -81,7 +75,7 @@ const Home: React.FC = () => {
           // Pass only necessary props, like refs
           mainRef={mainScrollRef} // Keep ref for scrolling
           sidebarRef={sidebarRef}
-          navbarRef={navbarRef}
+          // navbarRef={navbarRef} // Removed: navbarRef is no longer used by Layout
           contentAreaRef={contentAreaRef}
           // Pass MainContent explicitly as a prop, remove drilled props from it too
           mainContentSlot={

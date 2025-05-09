@@ -21,49 +21,104 @@ https://deepwiki.com/minipuft/mediaFlow/1-overview
 │       └── assets/        # Compiled server assets (e.g., static files)
 ├── docs/                  # Project documentation and guides
 │   └── images/            # Documentation assets
-├── public/                # Static files served by Express
-├── Scripts/               # Custom utility scripts
+├── public/                # Static files served by Express (e.g., favicons, serviceWorker.js)
+├── Scripts/               # Custom utility scripts (e.g., check-engines.js)
 ├── src/                   # Application source code
 │   ├── animations/        # Framer Motion & GSAP animation logic
-│   │   ├── presets/         # NEW: Animation preset definitions
-│   │   │   ├── dragDrop/      # NEW: Drag & Drop GSAP presets
-│   │   │   ├── uiEffects/     # NEW: General UI effect presets (GSAP & Framer)
-│   │   │   ├── index.ts       # NEW: Barrel file exporting combined presets
-│   │   │   └── types.ts       # NEW: Shared animation types
-│   │   ├── AnimationPipeline.ts # GSAP animation orchestrator
-│   │   └── MotionPreset.tsx     # (Currently Unused) Framer Motion preset wrapper
-│   ├── api/               # Frontend API client modules (React Query hooks)
+│   │   ├── presets/         # Reusable animation preset definitions
+│   │   │   ├── dragDrop/      # Presets related to drag & drop animations (e.g., dragReorderAnimations.ts)
+│   │   │   ├── uiEffects/     # Presets for general UI effects (e.g., framerPresets.ts, gsapPresets.ts)
+│   │   │   ├── index.ts       # Barrel file exporting combined presets
+│   │   │   ├── types.ts       # Shared TypeScript types for animations
+│   │   │   ├── GroupingAnimator.ts # Logic for image grouping animations
+│   │   │   └── MotionPreset.tsx    # Example or specific Framer Motion preset component
+│   │   ├── AnimationManager.tsx # Core: Manages AnimationPipeline lifecycle, provides useAnimationPipeline hook
+│   │   └── AnimationPipeline.ts # Core: GSAP animation orchestrator / timeline wrapper
+│   ├── api/               # Backend API route definitions (Express framework)
+│   │   ├── image/           # Routes specific to individual image operations
+│   │   │   └── [...params].ts # Handler for dynamic image routes (e.g., /api/image/some/path)
+│   │   ├── images.ts        # Routes for image collections and listings
+│   │   ├── folders.ts       # Routes for folder navigation and structure
+│   │   ├── search.ts        # Routes for search functionality
+│   │   ├── upload.ts        # Routes for file uploads
+│   │   └── getCurrentDirectory.ts # Route to get current directory information
 │   ├── components/        # Reusable React components
-│   │   └── views/         # Page-level view components
-│   ├── contexts/          # React Context providers
+│   │   ├── lazy/          # Components intended for lazy loading
+│   │   └── views/         # Larger components representing page views or sections
+│   ├── contexts/          # React Context providers for global state/functions
+│   │   ├── AnimationControllerContext.tsx # Context for event-driven animation orchestration
+│   │   ├── ColorContext.tsx     # Context for managing theme or image-derived colors
+│   │   └── ImageProcessingContext.tsx # Context related to client-side image processing state
 │   ├── hooks/             # Custom React hooks
-│   │   ├── __tests__/     # Hook unit tests
-│   │   └── query/         # Data-fetching hooks (React Query)
-│   ├── lib/               # Shared utility libraries
-│   │   ├── cache/         # Client-side UI state caching (e.g., scroll)
-│   │   └── queryClient/   # React Query client setup & persistence
-│   ├── pages/             # Entry points for server-side rendering
-│   ├── server/            # Server-side modules and API routes
-│   │   └── lib/
-│   │       └── cache/     # Server-side cache providers
-│   ├── styles/            # Global and SCSS module styles
-│   ├── types/             # TypeScript type definitions
-│   ├── utils/             # Utility functions (e.g., webgl helpers)
-│   │   ├── index.ts           # Barrel file exporting utilities
-│   │   ├── MaxHeap.ts         # Generic fixed-size max-heap utility
-│   │   ├── priorityCalculator.ts # Distance-based priority calculation
-│   │   └── webgl/            # WebGL helper utilities
-│   └── workers/           # Web Worker source code
+│   │   ├── __tests__/     # Unit tests for hooks
+│   │   ├── query/         # Custom hooks for data-fetching with React Query
+│   │   │   ├── useFolderImages.ts
+│   │   │   ├── useFolders.ts
+│   │   │   ├── useCurrentDirectory.ts
+│   │   │   └── useImageQuery.ts
+│   │   └── usePrefetchManager.ts # Hook for adaptive scroll prefetching logic
+│   ├── lib/               # Shared utility libraries, primarily client-focused
+│   │   ├── cache/         # Client-side caching utilities
+│   │   │   └── feedStateCache.ts # Example: Caching for image feed display state
+│   │   ├── queryClient/   # React Query client setup and persistence logic
+│   │   │   └── idbPersister.ts # IndexedDB persister for React Query state
+│   │   ├── queryClient.ts # Core: Main React Query client configuration
+│   │   └── api.ts         # Central client-side API request functions (e.g., using Axios)
+│   ├── pages/             # Top-level page components rendered by the router (e.g., Home.tsx)
+│   ├── routes/            # Client-side routing configuration
+│   │   └── AppRouter.tsx    # Core: Main application router component using React Router
+│   ├── server/            # Server-specific modules (excluding API routes which are in src/api)
+│   │   └── lib/           # Server-side utility libraries
+│   │       └── cache/     # Server-side caching mechanisms
+│   │           ├── index.ts   # Barrel file for server cache utilities
+│   │           ├── types.ts   # TypeScript types for server cache
+│   │           └── providers/ # Specific cache provider implementations
+│   │               └── lruCache.ts # LRU (Least Recently Used) cache for server
+│   ├── styles/            # Global and SCSS module styles (e.g., globals.scss)
+│   ├── types/             # Global TypeScript type definitions for the project
+│   ├── utils/             # General utility functions, broadly applicable
+│   │   ├── index.ts           # Barrel file exporting common utilities
+│   │   ├── MaxHeap.ts         # Generic fixed-size max-heap data structure
+│   │   ├── priorityCalculator.ts # Utility for calculating priorities (e.g., for prefetching)
+│   │   ├── layoutCalculator.ts # Functions for complex layout calculations
+│   │   ├── AnimationUtils.ts  # Helper functions and utilities for animations
+│   │   ├── imageUtils.ts      # Utility functions specific to image manipulation or data
+│   │   ├── errorHandler.ts    # Centralized error handling utilities
+│   │   ├── constants.ts       # Application-wide constant values
+│   │   └── webgl/             # Utility functions related to WebGL operations
+│   └── workers/           # Web Worker source code (for background tasks)
+│       ├── workerPool.ts      # Core: Manages lifecycle and task distribution for certain workers
+│       ├── imageProcessor.ts  # Main thread module orchestrating image processing (may use imageProcessorWorker)
+│       ├── imageProcessorWorker.worker.ts # Comlink worker for intensive image processing tasks
+│       ├── animationCoordinator.worker.ts # Comlink worker for sequencing complex animations
+│       ├── layoutWorker.worker.ts    # Worker dedicated to layout calculations
+│       ├── groupingWorker.worker.ts  # Worker for image grouping logic
+│       └── colorExtractor.worker.ts # Worker for extracting dominant colors from images
+│   ├── entry-server.tsx   # Core: SSR entry point for the React application
+│   └── main.tsx           # Core: Client-side entry point for the React application
 ├── system_prompts/        # Internal system prompt templates for AI assistant
-├── index.html             # Base HTML template for SSR
-├── server.ts              # Express server entry point (integrated with Vite middleware)
-├── package.json           # Project metadata and dependencies
-├── tsconfig.base.json     # Base TypeScript configuration
-├── tsconfig.client.json   # Client-specific TypeScript config
-├── tsconfig.server.json   # Server-specific TypeScript config
-├── vite.config.client.ts  # Vite config for client build
-├── vite.config.server.ts  # Vite config for server build
-└── README.md              # Project overview and setup instructions
+├── .cursorrules           # Cursor specific rules configuration file
+├── .env                   # Environment variables (typically not committed)
+├── .env.example           # Example environment variables
+├── .eslintignore          # Files/directories to be ignored by ESLint
+├── .eslintrc.json         # ESLint configuration
+├── .gitignore             # Files/directories to be ignored by Git
+├── .prettierrc            # Prettier code formatter configuration
+├── commitlint.config.js   # Commitlint configuration for conventional commits
+├── index.html             # Base HTML template for SSR and client-side app root
+├── jest.config.js         # Jest testing framework configuration
+├── package-lock.json      # Exact versions of project dependencies
+├── package.json           # Project metadata, scripts, and dependencies
+├── postcss.config.cjs     # PostCSS configuration
+├── README.md              # Project overview, setup, and usage instructions
+├── server.ts              # Core: Express server entry point (integrates Vite, sets up SSR, API routes)
+├── tailwind.config.js     # Tailwind CSS configuration
+├── tsconfig.base.json     # Base TypeScript configuration, often extended by others
+├── tsconfig.client.json   # TypeScript configuration specific to the client build
+├── tsconfig.json          # Main TypeScript configuration for the project
+├── tsconfig.server.json   # TypeScript configuration specific to the server build
+├── vite.config.client.ts  # Vite configuration for the client-side build
+└── vite.config.server.ts  # Vite configuration for the server-side build (SSR)
 ```
 
 This structure organizes source code under `src/`, separates build outputs in `dist/`, and places configuration, documentation, and static assets at the root of the repository.

@@ -108,10 +108,6 @@ const Sidebar = forwardRef<HTMLDivElement, SidebarProps>(
               </li>
             ))}
           </ul>
-          {/* Upload button */}
-          <div className="p-8 mt-auto">
-            <button className={`${styles.uploadButton} w-full`}>Upload</button>
-          </div>
         </div>
       </motion.div>
     );

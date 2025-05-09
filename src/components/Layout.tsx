@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 // Removed ViewMode import, will get from context if needed internally
-import Navbar from './Navbar.js';
+import NexusOrb from './NexusOrb'; // Import NexusOrb
 import Sidebar from './Sidebar.js';
 // import { getImages } from '../lib/api.js'; // Removed: Data fetching moved to hooks/ImageFeed
 import gsap from 'gsap';
@@ -21,7 +21,7 @@ interface LayoutProps {
   mainContentSlot: React.ReactNode;
   // Keep refs
   mainRef: React.RefObject<HTMLElement>;
-  navbarRef?: React.Ref<HTMLDivElement>;
+  // navbarRef?: React.Ref<HTMLDivElement>; // NexusOrb doesn't need a ref passed this way currently
   sidebarRef?: React.Ref<HTMLDivElement>;
   contentAreaRef?: React.Ref<HTMLDivElement>;
 }
@@ -33,7 +33,7 @@ const Layout = forwardRef<HTMLDivElement, LayoutProps>(
       // Destructure only remaining props
       mainContentSlot,
       mainRef,
-      navbarRef,
+      // navbarRef, // Removed
       sidebarRef,
       contentAreaRef,
     },
@@ -111,17 +111,7 @@ const Layout = forwardRef<HTMLDivElement, LayoutProps>(
           {/* Use AuraBackground instead of ParticleBackground */}
           <AuraBackground />
           {/* <ParticleBackground /> */}
-          <Navbar
-            ref={navbarRef}
-            // Remove props now provided by context
-            // onSearch={handleSearch}
-            // zoom={zoom}
-            // onZoomChange={onZoomChange}
-            // isGrouped={isGrouped}
-            // onGroupToggle={onGroupToggle}
-            // viewMode={viewMode}
-            // onViewModeChange={onViewModeChange}
-          />
+          <NexusOrb /> {/* Replaced Navbar with NexusOrb */}
           <div className="flex flex-1 overflow-hidden">
             <Sidebar
               ref={sidebarRef}

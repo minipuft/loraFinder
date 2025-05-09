@@ -30,10 +30,11 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
 
   return (
     <motion.div
-      className="relative flex items-center bg-gray-800/80 backdrop-blur-md rounded-full p-3 overflow-hidden"
+      className="relative flex items-center bg-[rgba(var(--theme-background-dark-rgb,22,22,30),0.7)] backdrop-blur-md rounded-full p-3 overflow-hidden"
       style={{
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        boxShadow: '0 4px 12px rgba(var(--theme-shadow-rgb,0,0,0),0.1)',
         width: '200px',
+        border: '1px solid rgba(var(--theme-primary-rgb,122,162,247),0.2)',
       }}
       animate={controls}
     >
@@ -45,7 +46,7 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
         onClick={() => onZoomChange(Math.max(0.5, zoom - 0.1))}
       >
         <motion.svg
-          className="text-gray-200 mr-3 cursor-pointer"
+          className="text-[rgba(var(--theme-text-rgb,220,220,220),0.8)] mr-3 cursor-pointer"
           width="20"
           height="20"
           viewBox="0 0 24 24"
@@ -69,7 +70,8 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
             left: '50%',
             width: '30px',
             height: '30px',
-            background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, rgba(59,130,246,0) 70%)',
+            background:
+              'radial-gradient(circle, rgba(var(--theme-primary-rgb,122,162,247),0.25) 0%, rgba(var(--theme-primary-rgb,122,162,247),0) 70%)',
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none',
           }}
@@ -79,12 +81,12 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
       </motion.div>
 
       {/* Slider track */}
-      <div className="relative flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div className="relative flex-1 h-1.5 bg-[rgba(var(--theme-primary-rgb,122,162,247),0.15)] rounded-full overflow-hidden">
         <motion.div
-          className="absolute top-0 left-0 h-full bg-blue-500 rounded-full"
-          style={{ boxShadow: '0 0 10px rgba(59,130,246,0.5)' }}
+          className="absolute top-0 left-0 h-full bg-[rgba(var(--theme-primary-rgb,122,162,247),1)] rounded-full"
+          style={{ boxShadow: '0 0 8px rgba(var(--theme-primary-rgb,122,162,247),0.6)' }}
           animate={{ width: sliderWidth }}
-          transition={{ type: 'spring', stiffness: 300, damping: 10, precision: 0.01 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20, precision: 0.01 }}
         />
         <input
           type="range"
@@ -109,7 +111,7 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
         onClick={() => onZoomChange(Math.min(2, zoom + 0.1))}
       >
         <motion.svg
-          className="text-gray-200 ml-3 cursor-pointer"
+          className="text-[rgba(var(--theme-text-rgb,220,220,220),0.8)] ml-3 cursor-pointer"
           width="20"
           height="20"
           viewBox="0 0 24 24"
@@ -133,7 +135,8 @@ const ZoomSlider: React.FC<ZoomSliderProps> = ({ zoom, onZoomChange }) => {
             left: '50%',
             width: '30px',
             height: '30px',
-            background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, rgba(59,130,246,0) 70%)',
+            background:
+              'radial-gradient(circle, rgba(var(--theme-primary-rgb,122,162,247),0.25) 0%, rgba(var(--theme-primary-rgb,122,162,247),0) 70%)',
             transform: 'translate(-50%, -50%)',
             pointerEvents: 'none',
           }}

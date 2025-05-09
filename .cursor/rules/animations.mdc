@@ -1,3 +1,9 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+
 # Animations in MediaFlow
 
 This document outlines the animation strategies used within the MediaFlow application.
