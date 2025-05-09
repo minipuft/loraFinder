@@ -23,9 +23,14 @@ interface NexusOrbMenuItemProps {
   zoomValue?: number;
   onZoomChange?: (newZoom: number) => void;
   onCloseZoom?: () => void;
+  // New props for positioning
+  orbViewportCenter?: { x: number; y: number } | null;
+  windowCenter?: { x: number; y: number } | null;
+  // New props for dynamic geometry
+  menuRadius: number;
+  fanArcDegrees: number;
 }
 
-const RADIUS = 80; // Radius of the circle menu in pixels
 const ITEM_ANGLE_OFFSET = -90; // Start first item at the top (0 degrees is right)
 
 const NexusOrbMenuItem: React.FC<NexusOrbMenuItemProps> = ({
@@ -45,10 +50,11 @@ const NexusOrbMenuItem: React.FC<NexusOrbMenuItemProps> = ({
   zoomValue,
   onZoomChange,
   onCloseZoom,
+  orbViewportCenter,
+  windowCenter,
+  menuRadius,
+  fanArcDegrees,
 }) => {
-  const angleIncrement = 360 / totalItems;
-  const targetAngle = ITEM_ANGLE_OFFSET + index * angleIncrement;
-
   const itemPositionVariants = {
     hidden: {
       x: 0,
@@ -57,17 +63,42 @@ const NexusOrbMenuItem: React.FC<NexusOrbMenuItemProps> = ({
       scale: 0.5,
       transition: { duration: 0.2, ease: 'easeIn' },
     },
-    visible: {
-      x: RADIUS * Math.cos((targetAngle * Math.PI) / 180),
-      y: RADIUS * Math.sin((targetAngle * Math.PI) / 180),
-      opacity: 1,
-      scale: 1,
-      transition: {
-        type: 'spring',
-        stiffness: 300,
-        damping: 20,
-        delay: index * 0.03, // Staggered appearance
-      },
+    visible: () => {
+      let targetX = 0;
+      let targetY = 0;
+
+      if (orbViewportCenter && windowCenter) {
+        const dX = windowCenter.x - orbViewportCenter.x;
+        const dY = windowCenter.y - orbViewportCenter.y;
+        const baseAngleRad = Math.atan2(dY, dX);
+        const fanArcRad = (fanArcDegrees * Math.PI) / 180;
+        let itemAngleRad = baseAngleRad - fanArcRad / 2;
+        if (totalItems > 1) {
+          itemAngleRad += (index / (totalItems - 1)) * fanArcRad;
+        } else {
+          itemAngleRad = baseAngleRad;
+        }
+        targetX = menuRadius * Math.cos(itemAngleRad);
+        targetY = menuRadius * Math.sin(itemAngleRad);
+      } else {
+        const angleIncrement = 360 / totalItems;
+        const targetAngleDeg = ITEM_ANGLE_OFFSET + index * angleIncrement;
+        targetX = menuRadius * Math.cos((targetAngleDeg * Math.PI) / 180);
+        targetY = menuRadius * Math.sin((targetAngleDeg * Math.PI) / 180);
+      }
+
+      return {
+        x: targetX,
+        y: targetY,
+        opacity: 1,
+        scale: 1,
+        transition: {
+          type: 'spring',
+          stiffness: 300,
+          damping: 20,
+          delay: index * 0.03,
+        },
+      };
     },
   };
 

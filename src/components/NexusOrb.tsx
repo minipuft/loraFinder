@@ -9,10 +9,11 @@ import {
   IconZoomIn,
 } from '@tabler/icons-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import React, { CSSProperties, useContext, useEffect, useRef, useState } from 'react';
+import React, { CSSProperties, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppSettings } from '../contexts/AppSettingsContext';
 import { ColorContext } from '../contexts/ColorContext';
 import { useCurrentDirectory } from '../hooks/query/useCurrentDirectory';
+import useViewport from '../hooks/useViewport';
 import styles from '../styles/NexusOrb.module.scss';
 import { ViewMode } from '../types';
 import NexusOrbMenuItem from './NexusOrbMenuItem';
@@ -25,10 +26,12 @@ const hexToRgbString = (hex: string): string => {
     : '122, 162, 247'; // Default to primary if conversion fails
 };
 
-const ORB_CSS_OFFSET = 20; // As defined in NexusOrb.module.scss for bottom/left
-const NEXUS_ORB_SIZE = 40; // As defined by --nexus-orb-size in SCSS
-const MENU_ITEM_RADIUS = 80; // From NexusOrbMenuItem.tsx
-const MENU_ITEM_DIAMETER = 40; // From --nexus-orb-size used by menu items
+const ORB_CSS_OFFSET = 20;
+const NEXUS_ORB_SIZE = 40;
+
+// Default/current geometry for the menu - will be dynamic in Phase 2
+// const CURRENT_MENU_RADIUS = 95; // Will become dynamic
+// const CURRENT_FAN_ARC_DEGREES = 170; // Will become dynamic
 
 const NexusOrb: React.FC = () => {
   const [isHovered, setIsHovered] = useState(false);
@@ -36,8 +39,9 @@ const NexusOrb: React.FC = () => {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isZoomSliderActive, setIsZoomSliderActive] = useState(false);
-  const [menuOffset, setMenuOffset] = useState({ x: 0, y: 0 }); // New state for menu offset
-  const orbContainerRef = useRef<HTMLDivElement>(null); // Ref for the main orb container
+  const [menuOffset, setMenuOffset] = useState({ x: 0, y: 0 });
+  const [orbViewportCenter, setOrbViewportCenter] = useState<{ x: number; y: number } | null>(null);
+  const orbContainerRef = useRef<HTMLDivElement>(null);
 
   const { data: currentDirectoryPath, isLoading, isError } = useCurrentDirectory();
   const { dominantColors } = useContext(ColorContext);
@@ -50,6 +54,7 @@ const NexusOrb: React.FC = () => {
     zoom,
     handleZoomChange,
   } = useAppSettings();
+  const viewport = useViewport();
 
   const primaryColorRgb = dominantColors[0] ? hexToRgbString(dominantColors[0]) : '122, 162, 247';
   const secondaryColorRgb = dominantColors[1] ? hexToRgbString(dominantColors[1]) : primaryColorRgb;
@@ -88,49 +93,11 @@ const NexusOrb: React.FC = () => {
     visible: { opacity: 1, x: 0, transition: { duration: 0.3, ease: 'easeOut' } },
   };
 
-  useEffect(() => {
-    if (isMenuOpen) {
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      // Orb center relative to viewport (bottom-left origin for orb)
-      const orbCenterX = ORB_CSS_OFFSET + NEXUS_ORB_SIZE / 2;
-      const orbCenterYFromBottom = ORB_CSS_OFFSET + NEXUS_ORB_SIZE / 2;
-      const orbCenterYFromTop = viewportHeight - orbCenterYFromBottom;
-
-      const maxMenuExtent = MENU_ITEM_RADIUS + MENU_ITEM_DIAMETER / 2;
-      const padding = 10; // Extra padding to avoid touching the edge
-
-      let offsetX = 0;
-      let offsetY = 0;
-
-      // Check left overflow
-      if (orbCenterX - maxMenuExtent < 0) {
-        offsetX = -(orbCenterX - maxMenuExtent) + padding;
-      }
-      // Check right overflow (less likely for bottom-left orb, but for completeness)
-      if (orbCenterX + maxMenuExtent > viewportWidth) {
-        offsetX = viewportWidth - (orbCenterX + maxMenuExtent) - padding;
-      }
-      // Check top overflow
-      if (orbCenterYFromTop - maxMenuExtent < 0) {
-        offsetY = -(orbCenterYFromTop - maxMenuExtent) + padding;
-      }
-      // Check bottom overflow
-      if (orbCenterYFromTop + maxMenuExtent > viewportHeight) {
-        offsetY = viewportHeight - (orbCenterYFromTop + maxMenuExtent) - padding;
-      }
-      setMenuOffset({ x: offsetX, y: offsetY });
-    } else {
-      setMenuOffset({ x: 0, y: 0 });
-    }
-  }, [isMenuOpen]);
-
   const toggleMenu = () => {
-    setIsMenuOpen(prev => !prev); // Use functional update for safety
+    setIsMenuOpen(prev => !prev);
     if (isSearchActive) setIsSearchActive(false);
     if (isZoomSliderActive) setIsZoomSliderActive(false);
-    if (isMenuOpen) setSearchQuery(''); // This will be true if menu *was* open and is now closing
+    if (isMenuOpen) setSearchQuery('');
   };
 
   const activateSearch = () => {
@@ -171,6 +138,10 @@ const NexusOrb: React.FC = () => {
       onClick: isSearchActive ? submitSearch : activateSearch,
       isSearchInput: isSearchActive,
       onCloseSearch: deactivateSearch,
+      ...(isSearchActive && {
+        searchQuery: searchQuery,
+        onSearchQueryChange: handleSearchInputChange,
+      }),
     },
     {
       id: ViewMode.GRID,
@@ -213,9 +184,8 @@ const NexusOrb: React.FC = () => {
       icon: isZoomSliderActive ? <IconX /> : <IconZoomIn />,
       onClick: isZoomSliderActive ? deactivateZoomSlider : activateZoomSlider,
       isZoomSliderInput: isZoomSliderActive,
-      zoomValue: zoom,
-      onZoomChange: handleZoomChange,
       onCloseZoom: deactivateZoomSlider,
+      ...(isZoomSliderActive && { zoomValue: zoom, onZoomChange: handleZoomChange }),
     },
   ];
 
@@ -225,7 +195,81 @@ const NexusOrb: React.FC = () => {
     effectiveMenuItems = effectiveMenuItems.filter(item => item.id === 'zoom-slider-active');
   }
 
-  // Determine current orb animation state
+  const { currentMenuRadius, currentFanArcDegrees } = useMemo(() => {
+    const itemCount = effectiveMenuItems.length;
+    let radius = 95;
+    let arcDegrees = 170;
+
+    if (itemCount <= 0) {
+      radius = 85;
+      arcDegrees = 0;
+    } else if (itemCount === 1) {
+      radius = 85;
+      arcDegrees = 0;
+    } else if (itemCount === 2) {
+      radius = 90;
+      arcDegrees = 60;
+    } else if (itemCount === 3) {
+      radius = 95;
+      arcDegrees = 100;
+    } else if (itemCount === 4) {
+      radius = 100;
+      arcDegrees = 130;
+    } else if (itemCount === 5) {
+      radius = 105;
+      arcDegrees = 160;
+    } else {
+      radius = 110;
+      arcDegrees = 180;
+    }
+    return { currentMenuRadius: radius, currentFanArcDegrees: arcDegrees };
+  }, [effectiveMenuItems.length]);
+
+  const currentWindowCenter = useMemo(() => {
+    if (viewport.rect.width && viewport.rect.height) {
+      return { x: viewport.rect.width / 2, y: viewport.rect.height / 2 };
+    }
+    return null;
+  }, [viewport.rect.width, viewport.rect.height]);
+
+  useEffect(() => {
+    if (orbContainerRef.current) {
+      const rect = orbContainerRef.current.getBoundingClientRect();
+      setOrbViewportCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    }
+  }, [isMenuOpen]);
+
+  useEffect(() => {
+    if (isMenuOpen) {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const orbCenterX = ORB_CSS_OFFSET + NEXUS_ORB_SIZE / 2;
+      const orbCenterYFromBottom = ORB_CSS_OFFSET + NEXUS_ORB_SIZE / 2;
+      const orbCenterYFromTop = viewportHeight - orbCenterYFromBottom;
+
+      const maxMenuExtent = currentMenuRadius + NEXUS_ORB_SIZE / 2;
+      const padding = 10;
+
+      let offsetX = 0;
+      let offsetY = 0;
+      if (orbCenterX - maxMenuExtent < 0) {
+        offsetX = -(orbCenterX - maxMenuExtent) + padding;
+      }
+      if (orbCenterX + maxMenuExtent > viewportWidth) {
+        offsetX = viewportWidth - (orbCenterX + maxMenuExtent) - padding;
+      }
+      if (orbCenterYFromTop - maxMenuExtent < 0) {
+        offsetY = -(orbCenterYFromTop - maxMenuExtent) + padding;
+      }
+      if (orbCenterYFromTop + maxMenuExtent > viewportHeight) {
+        offsetY = viewportHeight - (orbCenterYFromTop + maxMenuExtent) - padding;
+      }
+      setMenuOffset({ x: offsetX, y: offsetY });
+    } else {
+      setMenuOffset({ x: 0, y: 0 });
+    }
+  }, [isMenuOpen, currentMenuRadius]);
+
   let currentOrbAnimateState = 'rest';
   if (isMenuOpen) {
     currentOrbAnimateState = 'menuActive';
@@ -235,7 +279,7 @@ const NexusOrb: React.FC = () => {
 
   return (
     <motion.div
-      ref={orbContainerRef} // Attach ref
+      ref={orbContainerRef}
       className={styles.nexusOrbContainer}
       style={orbStyle}
       onHoverStart={() =>
@@ -306,7 +350,11 @@ const NexusOrb: React.FC = () => {
                 isZoomSliderInput={item.isZoomSliderInput}
                 zoomValue={item.zoomValue}
                 onZoomChange={item.onZoomChange}
-                onCloseZoom={deactivateZoomSlider}
+                onCloseZoom={item.onCloseZoom || deactivateZoomSlider}
+                orbViewportCenter={orbViewportCenter}
+                windowCenter={currentWindowCenter}
+                menuRadius={currentMenuRadius}
+                fanArcDegrees={currentFanArcDegrees}
               />
             ))}
         </AnimatePresence>

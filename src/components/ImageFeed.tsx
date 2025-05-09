@@ -27,6 +27,7 @@ import { GroupingAnimator } from '../animations/presets/GroupingAnimator';
 import { useAppSettings } from '../contexts';
 import { ColorContext, HoverState } from '../contexts/ColorContext';
 import { DragProvider } from '../contexts/DragContext';
+import { useImageFeedCenter } from '../contexts/ImageFeedCenterContext';
 import { useImageProcessing } from '../contexts/ImageProcessingContext';
 import { useFolderImages } from '../hooks/query/useFolderImages';
 import { useAnimationCoordinator } from '../hooks/useAnimationCoordinator';
@@ -162,6 +163,7 @@ interface PotentialDropTarget {
 const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
   // Consume context
   const { selectedFolder: folderPath, isGrouped, zoom, viewMode } = useAppSettings();
+  const { setImageFeedCenter } = useImageFeedCenter();
 
   // --- EARLY EXIT if folderPath is invalid --- >
   if (!folderPath || typeof folderPath !== 'string' || folderPath.trim() === '') {
@@ -322,13 +324,23 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
   const feedCenter = useMemo(() => {
     if (feedRef.current) {
       const rect = feedRef.current.getBoundingClientRect();
-      // Use viewport-relative coordinates for GSAP calculations
       return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }
-    return { x: 0, y: 0 }; // Default when ref is not available
-    // Depend on containerWidth which changes when the ref is measured,
-    // and windowSize for viewport changes.
+    return { x: 0, y: 0 }; // Default for internal use, context will get null if ref not ready
   }, [containerWidth, windowSize]);
+
+  useEffect(() => {
+    if (feedRef.current) {
+      const rect = feedRef.current.getBoundingClientRect();
+      setImageFeedCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    } else {
+      setImageFeedCenter(null); // Set context to null if feedRef is not available
+    }
+    // Optional: Cleanup function to set context to null on unmount
+    return () => {
+      // setImageFeedCenter(null);
+    };
+  }, [containerWidth, windowSize, setImageFeedCenter, folderPath]); // Re-calculate on container/window size change
 
   // --- Initialize (Refactored) Prefetch Manager ---
   const { findNearbyItems } = usePrefetchManager({

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { useAnimationPipeline } from '../animations/AnimationManager';
-import Layout from '../components/Layout.js';
-import MainContent from '../components/MainContent.js';
+import Layout from '../components/Layout';
+import MainContent from '../components/MainContent';
 import { AppSettingsProvider } from '../contexts';
 import { useAnimationController } from '../contexts/AnimationControllerContext';
+import { ImageFeedCenterProvider } from '../contexts/ImageFeedCenterContext';
 
 /**
  * Home component - the main page of the application.
@@ -12,28 +13,22 @@ import { useAnimationController } from '../contexts/AnimationControllerContext';
  * @returns {JSX.Element} The main application page.
  */
 const Home: React.FC = () => {
-  // Refs
   const mainScrollRef = useRef<HTMLElement>(null);
-  const layoutWrapperRef = useRef<HTMLDivElement>(null); // Ref for the outer wrapper div
-  const sidebarRef = useRef<HTMLDivElement>(null); // Ref for Sidebar
-  // const navbarRef = useRef<HTMLDivElement>(null); // Navbar is replaced by NexusOrb
-  const contentAreaRef = useRef<HTMLDivElement>(null); // Ref for MainContent wrapper area
+  const layoutWrapperRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
 
-  // --- Animation Setup ---
   const homeEnterPipeline = useAnimationPipeline('homePage');
   const { trigger } = useAnimationController();
 
-  // Configure the entrance animation steps once
   useEffect(() => {
     if (
       homeEnterPipeline &&
       layoutWrapperRef.current &&
       sidebarRef.current &&
-      // navbarRef.current && // NexusOrb is not part of this initial fade-in sequence
       contentAreaRef.current
     ) {
       homeEnterPipeline.clear();
-
       homeEnterPipeline
         .addStep({
           target: layoutWrapperRef.current,
@@ -53,39 +48,30 @@ const Home: React.FC = () => {
           vars: { duration: 0.5 },
           position: '+=0.3',
         });
-
       homeEnterPipeline.play().catch(error => {
         console.error('[Home Page] Entrance animation failed:', error);
       });
     }
   }, [homeEnterPipeline]);
 
-  // --- Trigger pageEnter Event on Mount ---
   useEffect(() => {
     console.log('[Home Page] Triggering pageEnter event.');
     trigger('pageEnter');
   }, [trigger]);
 
-  // Render the main layout with removed props
   return (
-    // Wrap the entire output in the AppSettingsProvider
-    <AppSettingsProvider>
-      <div ref={layoutWrapperRef}>
-        <Layout
-          // Pass only necessary props, like refs
-          mainRef={mainScrollRef} // Keep ref for scrolling
-          sidebarRef={sidebarRef}
-          // navbarRef={navbarRef} // Removed: navbarRef is no longer used by Layout
-          contentAreaRef={contentAreaRef}
-          // Pass MainContent explicitly as a prop, remove drilled props from it too
-          mainContentSlot={
-            <MainContent
-              scrollContainerRef={mainScrollRef} // Keep ref
-            />
-          }
-        />
-      </div>
-    </AppSettingsProvider>
+    <ImageFeedCenterProvider>
+      <AppSettingsProvider>
+        <div ref={layoutWrapperRef}>
+          <Layout
+            mainRef={mainScrollRef}
+            sidebarRef={sidebarRef}
+            contentAreaRef={contentAreaRef}
+            mainContentSlot={<MainContent scrollContainerRef={mainScrollRef} />}
+          />
+        </div>
+      </AppSettingsProvider>
+    </ImageFeedCenterProvider>
   );
 };
 

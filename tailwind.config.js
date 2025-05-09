@@ -46,6 +46,18 @@ module.exports = {
           'sans-serif',
         ],
       },
+      // Conceptual Spacing Units for Future Consistency
+      spacing: {
+        'app-gutter': '1rem', // General layout gutter (16px)
+        'content-padding': '1.5rem', // Padding for main content areas (24px)
+        'control-padding-y': '0.5rem', // Vertical padding for controls (8px)
+        'control-padding-x': '0.75rem', // Horizontal padding for controls (12px)
+        'sidebar-width': '240px', // Anticipated sidebar width
+        'sidebar-padding-x': '1rem', // Sidebar horizontal padding (16px)
+        'sidebar-padding-y': '1.5rem', // Sidebar vertical padding (24px)
+        'menu-item-visual-gap': '0.25rem', // Desired visual gap between menu items (4px)
+        'orb-radius-current': '95px', // Current NexusOrb menu item radius
+      },
     },
   },
   variants: {
