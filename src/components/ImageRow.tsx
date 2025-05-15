@@ -4,9 +4,11 @@ import { ImageInfo } from '../types/index.js';
 // import { createImageProcessor } from '../workers/imageProcessor'; // No longer needed directly
 import { AnimatePresence, motion, Variants } from 'framer-motion';
 import { useAnimationPipeline } from '../animations/AnimationManager'; // Import the hook
+import { useAppSettings } from '../contexts/AppSettingsContext'; // Corrected: Import and use the custom hook
+import { ImagePalette } from '../contexts/ColorContext'; // Import ImagePalette
 import { useDragContext } from '../contexts/DragContext';
 import WorkerPool from '../workers/workerPool'; // Import WorkerPool type
-import ImageItem, { ImageHoverData } from './ImageItem.js';
+import ImageItem from './ImageItem.js'; // Import ImageItem default
 
 // Type for layout data passed down
 interface LayoutData {
@@ -29,15 +31,13 @@ interface ImageRowProps {
   workerPool: WorkerPool;
   gap: number;
   containerWidth: number;
-  onImageHover: (data: ImageHoverData) => void;
   onImageLoadError: (imageId: string) => void;
-  dominantColorMap?: Map<string, string>; // Added optional prop for colors
+  imagePaletteMap?: Map<string, ImagePalette | null>; // Corrected to imagePaletteMap
   initialAnimateState: 'initial' | 'animate'; // State for entrance animation
-  feedCenter: { x: number; y: number }; // Center coords of the parent feed
-  layoutDataMap: Map<string, LayoutData>; // <-- Add layoutDataMap prop
-  /** Called when the exit animation completes for grouping transitions */
+  feedCenter: { x: number; y: number } | null; // Center coords of the parent feed, can be null
+  layoutDataMap: Map<string, LayoutData>;
   onExitComplete?: () => void;
-  rowIndex: number; // <-- Add rowIndex prop
+  rowIndex: number;
 }
 
 // Define a smoother transition for layout animations using a soft spring
@@ -59,18 +59,18 @@ const ImageRow: React.FC<ImageRowProps> = ({
   groupedImages,
   workerPool,
   zoom,
-  onImageHover,
   onImageLoadError,
-  dominantColorMap,
+  imagePaletteMap, // Corrected to imagePaletteMap
   feedCenter,
   initialAnimateState,
   onExitComplete,
   isLastRow,
   containerWidth,
-  rowIndex, // <-- Destructure rowIndex
+  rowIndex,
 }) => {
   const rowRef = useRef<HTMLDivElement>(null);
   const { activeId, itemDropTarget, hoveredRowIndex } = useDragContext();
+  const { viewMode } = useAppSettings(); // Corrected: Use the custom hook
 
   // Get scoped pipeline using the hook
   const pipeline = useAnimationPipeline(`row-${rowIndex}`);
@@ -159,10 +159,39 @@ const ImageRow: React.FC<ImageRowProps> = ({
   // Use base class name, animations will handle visual state
   const rowClassName = styles.imageRow;
 
+  const rowVariants = {
+    initial: {
+      opacity: 0,
+      y: rowIndex % 2 === 0 ? -20 : 20,
+      scale: 0.98,
+    },
+    animate: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: 'spring',
+        stiffness: 150,
+        damping: 20,
+        staggerChildren: 0.03,
+        delay: rowIndex * 0.05,
+      },
+    },
+    exit: {
+      opacity: 0,
+      y: 20,
+      transition: { duration: 0.2, when: 'afterChildren' },
+    },
+  };
+
   return (
     <motion.div
       ref={rowRef}
       className={rowClassName}
+      variants={rowVariants} // Apply row variants
+      initial="initial" // Use variants for initial
+      animate="animate" // Use variants for animate
+      exit="exit" // Use variants for exit
       layout
       transition={smoothLayoutTransition}
       style={{
@@ -192,10 +221,12 @@ const ImageRow: React.FC<ImageRowProps> = ({
             return null;
           }
 
-          const dominantColor = dominantColorMap?.get(image.id);
+          const palette = imagePaletteMap?.get(image.id);
+          const baseColor = palette?.base || null;
+          const complementaryColor = palette?.complementary || null;
 
-          const initialOffsetX = feedCenter.x - (layoutData.left + layoutData.width / 2);
-          const initialOffsetY = feedCenter.y - (layoutData.top + layoutData.height / 2);
+          const initialOffsetX = (feedCenter?.x || 0) - (layoutData.left + layoutData.width / 2);
+          const initialOffsetY = (feedCenter?.y || 0) - (layoutData.top + layoutData.height / 2);
 
           const entranceVariants: Variants = {
             initial: {
@@ -220,8 +251,8 @@ const ImageRow: React.FC<ImageRowProps> = ({
             },
           };
 
-          const exitOffsetX = feedCenter.x - (layoutData.left + layoutData.width / 2);
-          const exitOffsetY = feedCenter.y - (layoutData.top + layoutData.height / 2);
+          const exitOffsetX = feedCenter?.x || 0 - (layoutData.left + layoutData.width / 2);
+          const exitOffsetY = feedCenter?.y || 0 - (layoutData.top + layoutData.height / 2);
 
           const exitVariant = {
             opacity: 0,
@@ -271,53 +302,39 @@ const ImageRow: React.FC<ImageRowProps> = ({
 
           return (
             <motion.div
-              key={image.id}
-              className={`${styles.imageWrapper} card`}
+              key={`${image.id}-motion-wrapper`}
+              className={styles.imageMotionWrapper}
               layout
-              transition={smoothLayoutTransition}
-              variants={entranceVariants}
-              initial="initial"
-              animate={initialAnimateState}
-              exit={exitVariant}
-              style={{
-                width: `${width}px`,
-                height: `${rowHeight}px`,
-                flexShrink: 0,
-                flexGrow: 0,
-                position: 'relative',
-                overflow: 'hidden',
-                willChange: 'transform, opacity',
+              variants={{
+                initial: entranceVariants.initial,
+                animate: entranceVariants.animate,
+                exit: exitVariant,
               }}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              custom={index}
+              transition={smoothLayoutTransition}
+              style={{ width: `${width}px`, height: `${rowHeight}px` }}
             >
-              <motion.div
-                variants={dragInteractionVariants}
-                animate={itemAnimationState}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  position: 'relative',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                }}
-              >
-                <ImageItem
-                  image={image}
-                  onClick={() => onImageClick(image)}
-                  containerWidth={width}
-                  containerHeight={rowHeight}
-                  zoom={zoom}
-                  isCarousel={group?.isCarousel || false}
-                  groupImages={group?.images || []}
-                  width={width}
-                  height={rowHeight}
-                  onImageHover={onImageHover}
-                  onImageLoadError={onImageLoadError}
-                  dominantColor={dominantColor}
-                  activeId={activeItemIdAsString}
-                  isDropTarget={isDropTargetForItem}
-                  dropPosition={dropPositionForItem}
-                />
-              </motion.div>
+              <ImageItem
+                key={image.id}
+                image={image}
+                width={width}
+                height={rowHeight}
+                onClick={() => onImageClick(image)}
+                onImageLoadError={onImageLoadError}
+                dominantColor={baseColor}
+                complementaryHoverColor={complementaryColor}
+                activeId={activeItemIdAsString}
+                isDropTarget={isDropTargetForItem}
+                dropPosition={dropPositionForItem}
+                containerWidth={containerWidth}
+                containerHeight={rowHeight}
+                zoom={zoom}
+                isCarousel={group?.isCarousel || false}
+                groupImages={group?.images || []}
+              />
             </motion.div>
           );
         })}

@@ -1,9 +1,18 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { motion } from 'framer-motion';
-import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, Variants } from 'framer-motion';
+import React, {
+  memo,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useAnimationPipeline } from '../animations/AnimationManager';
-import { useDragContext } from '../contexts/DragContext';
+import { ColorContext } from '../contexts/ColorContext';
 import { ProcessedImageUpdate, useImageProcessing } from '../contexts/ImageProcessingContext';
 import styles from '../styles/ImageItem.module.scss';
 import { ImageInfo } from '../types/index.js';
@@ -11,20 +20,25 @@ import ErrorBoundary from './ErrorBoundary';
 import ImageSkeleton from './ImageSkeleton';
 import SuspenseImage from './lazy/SuspenseImage';
 
-// Define hover data payload
-export interface ImageHoverData {
-  isHovering: boolean;
-  position: { x: number; y: number } | null; // Normalized coordinates relative to viewport/background
-  color: string | null; // Dominant color of the image, if available
-  imageId: string;
-}
-
-// Type for the processed image callback data
-interface ProcessedImageData {
-  id: string;
-  quality: 'low' | 'high';
-  processedImage: string;
-}
+// --- Local hexToVec3 Definition ---
+const hexToVec3 = (hex: string): [number, number, number] => {
+  let r = 0,
+    g = 0,
+    b = 0;
+  // 3 digits
+  if (hex.length === 4) {
+    r = parseInt(hex[1] + hex[1], 16);
+    g = parseInt(hex[2] + hex[2], 16);
+    b = parseInt(hex[3] + hex[3], 16);
+    // 6 digits
+  } else if (hex.length === 7) {
+    r = parseInt(hex[1] + hex[2], 16);
+    g = parseInt(hex[3] + hex[4], 16);
+    b = parseInt(hex[5] + hex[6], 16);
+  }
+  return [r / 255, g / 255, b / 255];
+};
+// --- End Local Definition ---
 
 interface ImageItemProps {
   image: ImageInfo;
@@ -38,308 +52,348 @@ interface ImageItemProps {
   height: number;
   isCarousel?: boolean;
   groupImages?: ImageInfo[];
-  onImageHover: (data: ImageHoverData) => void;
   onImageLoadError: (imageId: string) => void;
   dominantColor?: string | null;
+  complementaryHoverColor?: string | null;
   activeId?: string | null;
   isDropTarget?: boolean;
   dropPosition?: 'before' | 'after' | null;
 }
 
-const ImageItem: React.FC<ImageItemProps> = ({
-  image,
-  onClick,
-  containerWidth,
-  containerHeight,
-  zoom = 1,
-  groupCount,
-  width,
-  height,
-  isCarousel = false,
-  onImageHover,
-  onImageLoadError,
-  dominantColor,
-  activeId,
-  isDropTarget = false,
-  dropPosition = null,
-}) => {
-  const imageRef = useRef<HTMLImageElement>(null);
-  const [processedUrls, setProcessedUrls] = useState<{ low?: string; high?: string }>({});
-  const [hasError, setHasError] = useState(false);
-  const { subscribeToImageUpdates } = useImageProcessing();
+const ImageItem: React.FC<ImageItemProps> = memo(
+  ({
+    image,
+    onClick,
+    containerWidth,
+    containerHeight,
+    width,
+    height,
+    isCarousel = false,
+    onImageLoadError,
+    dominantColor,
+    complementaryHoverColor,
+    activeId,
+    isDropTarget = false,
+    dropPosition = null,
+    zoom,
+    groupCount,
+  }) => {
+    const itemRef = useRef<HTMLDivElement | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
+    const [processedUrls, setProcessedUrls] = useState<{ [key: string]: string }>({});
+    const { subscribeToImageUpdates, publishImageUpdate } = useImageProcessing();
+    const pipeline = useAnimationPipeline('image-item');
 
-  // Get activeId from context to disable passive hover during drag
-  const { activeId: globalActiveId, itemDropTarget: contextItemDropTarget } = useDragContext();
+    const indicatorBeforeRef = useRef<HTMLDivElement>(null);
+    const indicatorAfterRef = useRef<HTMLDivElement>(null);
 
-  // --- Animation Setup ---
-  const pipeline = useAnimationPipeline(`item-${image.id}`); // Use PER-ITEM scope
-  const itemRef = useRef<HTMLDivElement | null>(null);
-  const indicatorBeforeRef = useRef<HTMLDivElement>(null);
-  const indicatorAfterRef = useRef<HTMLDivElement>(null);
+    const { triggerEcho, setHoverState } = useContext(ColorContext);
+    const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
-    id: image.id,
-    disabled: isCarousel,
-  });
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
+      id: image.id,
+      disabled: isCarousel,
+    });
 
-  const sortableStyle: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    position: 'relative',
-    touchAction: 'none',
-  };
+    const sortableStyle: React.CSSProperties = {
+      transform: CSS.Transform.toString(transform),
+      position: 'relative',
+      touchAction: 'none',
+    };
 
-  const placeholderColor = useMemo(() => {
-    return dominantColor || '#333';
-  }, [dominantColor]);
+    const placeholderColor = useMemo(() => {
+      return dominantColor || '#333';
+    }, [dominantColor]);
 
-  const targetWidth = containerWidth;
-  const targetHeight = containerHeight;
+    const targetWidth = containerWidth;
+    const targetHeight = containerHeight;
 
-  const aspectRatio = useMemo(() => {
-    if (image.width && image.height && image.width > 0 && image.height > 0) {
-      return `${image.width} / ${image.height}`;
-    }
-    if (targetWidth > 0 && targetHeight > 0) {
-      return `${targetWidth} / ${targetHeight}`;
-    }
-    return '1 / 1';
-  }, [image.width, image.height, targetWidth, targetHeight]);
+    const aspectRatio = useMemo(() => {
+      if (image.width && image.height && image.width > 0 && image.height > 0) {
+        return `${image.width} / ${image.height}`;
+      }
+      if (targetWidth > 0 && targetHeight > 0) {
+        return `${targetWidth} / ${targetHeight}`;
+      }
+      return '1 / 1';
+    }, [image.width, image.height, targetWidth, targetHeight]);
 
-  const handleMouseEnter = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      // --- Disable passive hover if anything is being dragged --- >
-      if (globalActiveId !== null) return;
+    const handleMouseEnter = useCallback(() => {
+      if (activeId !== null) return;
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+      if (!itemRef.current) return;
 
-      // Trigger passive hover animation
+      const baseHoverColor = dominantColor || '#888888';
+      const complementaryHover = complementaryHoverColor || null;
+
+      setHoverState({
+        isHovering: true,
+        imageId: image.id,
+        color: baseHoverColor,
+        complementaryColor: complementaryHover,
+        position: null,
+      });
+
       pipeline
         .clear()
         .addStep({ target: itemRef.current!, preset: 'itemPassiveHoverStart' })
         .play();
 
-      // Existing AuraBackground update logic (optional)
-      const rect = event.currentTarget.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const normalizedX = centerX / window.innerWidth;
-      const normalizedY = centerY / window.innerHeight;
-      onImageHover({
-        // Prop call for Aura background / other parent logic
-        isHovering: true,
-        position: { x: normalizedX, y: normalizedY },
-        color: dominantColor || null,
-        imageId: image.id,
-      });
-    },
-    [globalActiveId, pipeline, onImageHover, image.id, dominantColor] // Add deps
-  );
+      hoverTimeoutRef.current = setTimeout(() => {
+        if (!itemRef.current) return;
+        const rect = itemRef.current.getBoundingClientRect();
+        const viewportCenterX = rect.left + rect.width / 2;
+        const viewportCenterY = rect.top + rect.height / 2;
 
-  const handleMouseLeave = useCallback(
-    () => {
-      // --- Disable passive hover end if anything is being dragged --- >
-      if (globalActiveId !== null) return;
+        const hexColorForEcho = dominantColor || '#888888';
+        const colorVec3 = hexToVec3(hexColorForEcho);
 
-      // Trigger passive hover end animation
-      pipeline.clear().addStep({ target: itemRef.current!, preset: 'itemPassiveHoverEnd' }).play();
+        console.log(
+          `[ImageItem ${image.id}] Triggering echo at [${viewportCenterX.toFixed(1)}, ${viewportCenterY.toFixed(1)}] with color ${hexColorForEcho}`
+        );
+        triggerEcho({ center: [viewportCenterX, viewportCenterY], colorVec3 });
+      }, 750);
+    }, [
+      activeId,
+      pipeline,
+      triggerEcho,
+      image.id,
+      dominantColor,
+      complementaryHoverColor,
+      setHoverState,
+    ]);
 
-      // Existing AuraBackground update logic (optional)
-      onImageHover({
-        // Prop call for Aura background / other parent logic
+    const handleMouseLeave = useCallback(() => {
+      if (activeId !== null) return;
+
+      setHoverState({
         isHovering: false,
-        position: null,
+        imageId: null,
         color: null,
-        imageId: image.id,
+        complementaryColor: null,
+        position: null,
       });
-    },
-    [globalActiveId, pipeline, onImageHover, image.id] // Add deps
-  );
 
-  const handleProcessedImageUpdate = useCallback(
-    (data: ProcessedImageUpdate) => {
-      console.log(`[ImageItem ${image.id}] Received processed data via context: ${data.quality}`);
-      setProcessedUrls(prev => ({
-        ...prev,
-        [data.quality]: data.imageUrl,
-      }));
-    },
-    [image.id]
-  );
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
 
-  useEffect(() => {
-    const unsubscribe = subscribeToImageUpdates(image.id, handleProcessedImageUpdate);
-    return () => unsubscribe();
-  }, [image.id, subscribeToImageUpdates, handleProcessedImageUpdate]);
+      pipeline.clear().addStep({ target: itemRef.current!, preset: 'itemPassiveHoverEnd' }).play();
+    }, [activeId, pipeline, setHoverState]);
 
-  useEffect(() => {
-    const currentLowUrl = processedUrls.low;
-    const currentHighUrl = processedUrls.high;
-    if (currentLowUrl) {
-      console.log(`[ImageItem ${image.id}] Revoking low-res blob URL on unmount: ${currentLowUrl}`);
-      URL.revokeObjectURL(currentLowUrl);
-    }
-    if (currentHighUrl) {
-      console.log(
-        `[ImageItem ${image.id}] Revoking high-res blob URL on unmount: ${currentHighUrl}`
-      );
-      URL.revokeObjectURL(currentHighUrl);
-    }
-  }, []);
-
-  const imageUrl = useMemo(() => {
-    if (processedUrls.high) return processedUrls.high;
-    if (processedUrls.low) return processedUrls.low;
-    return image.src;
-  }, [image.src, processedUrls]);
-
-  const handleImageError = useCallback(() => {
-    console.error(`[ImageItem ${image.id}] Failed to load image: ${imageUrl}`);
-    setHasError(true);
-    onImageLoadError(image.id);
-    if (imageUrl === processedUrls.high || imageUrl === processedUrls.low) {
-      setProcessedUrls({});
-    }
-  }, [imageUrl, image.id, onImageLoadError, processedUrls]);
-
-  const handleClick = useCallback(() => {
-    onClick(image);
-  }, [onClick, image]);
-
-  if (hasError) {
-    return (
-      <div
-        className={`${styles.imageItem} ${styles.imageError}`}
-        style={{
-          width: targetWidth,
-          height: targetHeight,
-          aspectRatio: aspectRatio,
-        }}
-      >
-        Error
-      </div>
+    const handleProcessedImageUpdate = useCallback(
+      (data: ProcessedImageUpdate) => {
+        console.log(`[ImageItem ${image.id}] Received processed data via context: ${data.quality}`);
+        setProcessedUrls(prev => ({
+          ...prev,
+          [data.quality]: data.imageUrl,
+        }));
+      },
+      [image.id]
     );
-  }
 
-  const itemClassName = `
-    ${styles.imageItem}
-    ${isDragging ? styles.isDragging : ''}
-  `;
+    useEffect(() => {
+      const unsubscribe = subscribeToImageUpdates(image.id, handleProcessedImageUpdate);
+      return () => unsubscribe();
+    }, [image.id, subscribeToImageUpdates, handleProcessedImageUpdate]);
 
-  // --- Effects for Drag/Drop Animations --- >
+    useEffect(() => {
+      const urlsToRevoke = { ...processedUrls };
+      return () => {
+        const currentLowUrl = urlsToRevoke.low;
+        const currentHighUrl = urlsToRevoke.high;
+        if (currentLowUrl) {
+          console.log(
+            `[ImageItem ${image.id}] Revoking low-res blob URL on unmount: ${currentLowUrl}`
+          );
+          URL.revokeObjectURL(currentLowUrl);
+        }
+        if (currentHighUrl) {
+          console.log(
+            `[ImageItem ${image.id}] Revoking high-res blob URL on unmount: ${currentHighUrl}`
+          );
+          URL.revokeObjectURL(currentHighUrl);
+        }
+      };
+    }, [processedUrls]);
 
-  // Effect for *being* the dragged item
-  useEffect(() => {
-    if (isDragging) {
-      // Use isDragging from useSortable
-      console.log(`[ImageItem ${image.id}] Drag Start (isDragging true)`);
-      pipeline.clear().addStep({ target: itemRef.current!, preset: 'itemDragStart' }).play();
-    } else {
-      // Check previous state if needed, or just revert if not dragging
-      // This might conflict if it's a drop target, handled by the next effect
-      console.log(`[ImageItem ${image.id}] Drag End (isDragging false)`);
-      // Ensure revert only happens if NOT ALSO a drop target ending
-      if (!isDropTarget) {
-        // Use prop isDropTarget
-        pipeline
-          .clear()
-          .addStep({ target: itemRef.current!, preset: 'itemDropTargetNormal' })
-          .play();
+    const imageUrl = useMemo(() => {
+      if (processedUrls.high) return processedUrls.high;
+      if (processedUrls.low) return processedUrls.low;
+      if (image.src && !image.src.startsWith('/') && !image.src.startsWith('http')) {
+        return `/api/image/${image.src.replace(/\\/g, '/')}`;
       }
+      return image.src;
+    }, [image.src, processedUrls]);
+
+    const handleImageError = useCallback(() => {
+      console.error(`[ImageItem ${image.id}] Failed to load image: ${imageUrl}`);
+      setHasError(true);
+      onImageLoadError(image.id);
+      if (imageUrl === processedUrls.high || imageUrl === processedUrls.low) {
+        setProcessedUrls({});
+      }
+    }, [imageUrl, image.id, onImageLoadError, processedUrls]);
+
+    const handleClick = useCallback(() => {
+      onClick(image);
+    }, [onClick, image]);
+
+    if (hasError) {
+      return (
+        <div
+          className={`${styles.imageItem} ${styles.imageError}`}
+          style={{
+            width: targetWidth,
+            height: targetHeight,
+            aspectRatio: aspectRatio,
+          }}
+        >
+          Error
+        </div>
+      );
     }
-  }, [isDragging, image.id, pipeline, isDropTarget]); // Added isDropTarget
 
-  // Effect for *being* the drop target (drag hover)
-  useEffect(() => {
-    if (isDropTarget) {
-      // Use the prop passed down
-      console.log(`[ImageItem ${image.id}] Drop Target Enter (isDropTarget true)`);
-      pipeline
-        .clear()
-        .addStep({ target: itemRef.current!, preset: 'itemDropTargetHoverStart' })
-        .play(); // Use new preset
+    const itemClassName = `
+      ${styles.imageItem}
+      ${isDragging ? styles.isDragging : ''}
+    `;
 
-      // Show indicators
-      pipeline.addStep({
-        target: indicatorBeforeRef.current!,
-        preset: dropPosition === 'before' ? 'showIndicator' : 'hideIndicator',
-      });
-      pipeline.addStep({
-        target: indicatorAfterRef.current!,
-        preset: dropPosition === 'after' ? 'showIndicator' : 'hideIndicator',
-      });
-      pipeline.play();
-    } else {
-      // Check if previously was drop target to trigger end animation
-      // This requires tracking previous isDropTarget state or careful checks
-      // Simpler: If not the drop target, ensure revert animation plays *unless* it's being dragged
-      console.log(`[ImageItem ${image.id}] Drop Target Leave (isDropTarget false)`);
-      if (!isDragging) {
-        // Only revert if not currently being dragged
+    // --- Effects for Drag/Drop Animations --- >
+
+    // Effect for *being* the dragged item
+    useEffect(() => {
+      if (isDragging) {
+        // Use isDragging from useSortable
+        console.log(`[ImageItem ${image.id}] Drag Start (isDragging true)`);
+        pipeline.clear().addStep({ target: itemRef.current!, preset: 'itemDragStart' }).play();
+      } else {
+        // Check previous state if needed, or just revert if not dragging
+        // This might conflict if it's a drop target, handled by the next effect
+        console.log(`[ImageItem ${image.id}] Drag End (isDragging false)`);
+        // Ensure revert only happens if NOT ALSO a drop target ending
+        if (!isDropTarget) {
+          // Use prop isDropTarget
+          pipeline
+            .clear()
+            .addStep({ target: itemRef.current!, preset: 'itemDropTargetNormal' })
+            .play();
+        }
+      }
+    }, [isDragging, image.id, pipeline, isDropTarget]); // Added isDropTarget
+
+    // Effect for *being* the drop target (drag hover)
+    useEffect(() => {
+      if (isDropTarget) {
+        // Use the prop passed down
+        console.log(`[ImageItem ${image.id}] Drop Target Enter (isDropTarget true)`);
         pipeline
           .clear()
-          .addStep({ target: itemRef.current!, preset: 'itemDropTargetHoverEnd' })
+          .addStep({ target: itemRef.current!, preset: 'itemDropTargetHoverStart' })
           .play(); // Use new preset
+
+        // Show indicators
+        pipeline.addStep({
+          target: indicatorBeforeRef.current!,
+          preset: dropPosition === 'before' ? 'showIndicator' : 'hideIndicator',
+        });
+        pipeline.addStep({
+          target: indicatorAfterRef.current!,
+          preset: dropPosition === 'after' ? 'showIndicator' : 'hideIndicator',
+        });
+        pipeline.play();
+      } else {
+        // Check if previously was drop target to trigger end animation
+        // This requires tracking previous isDropTarget state or careful checks
+        // Simpler: If not the drop target, ensure revert animation plays *unless* it's being dragged
+        console.log(`[ImageItem ${image.id}] Drop Target Leave (isDropTarget false)`);
+        if (!isDragging) {
+          // Only revert if not currently being dragged
+          pipeline
+            .clear()
+            .addStep({ target: itemRef.current!, preset: 'itemDropTargetHoverEnd' })
+            .play(); // Use new preset
+        }
+        // Hide indicators
+        pipeline.addStep({ target: indicatorBeforeRef.current!, preset: 'hideIndicator' });
+        pipeline.addStep({ target: indicatorAfterRef.current!, preset: 'hideIndicator' });
+        pipeline.play();
       }
-      // Hide indicators
-      pipeline.addStep({ target: indicatorBeforeRef.current!, preset: 'hideIndicator' });
-      pipeline.addStep({ target: indicatorAfterRef.current!, preset: 'hideIndicator' });
-      pipeline.play();
-    }
-  }, [isDropTarget, dropPosition, image.id, pipeline, isDragging]); // Added isDragging
+    }, [isDropTarget, dropPosition, image.id, pipeline, isDragging]); // Added isDragging
 
-  return (
-    <motion.div
-      data-image-id={image.id}
-      ref={node => {
-        // Combine refs using callback pattern
-        setNodeRef(node);
-        itemRef.current = node;
-      }}
-      className={itemClassName}
-      style={{
-        width: targetWidth,
-        height: targetHeight,
-        aspectRatio: aspectRatio,
-        backgroundColor: placeholderColor,
-        ...sortableStyle,
-      }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      {...attributes}
-      {...listeners}
-      layout
-    >
-      {/* Indicators */}
-      <div ref={indicatorBeforeRef} className={styles.indicatorBefore} />
-      <div ref={indicatorAfterRef} className={styles.indicatorAfter} />
+    // Ensure the itemRef is passed to the motion.div that has the mouse handlers
+    // Combine setNodeRef for sortable with itemRef
+    const combinedRef = (node: HTMLDivElement | null) => {
+      itemRef.current = node;
+      setNodeRef(node);
+    };
 
-      <div className={styles.imageItemInner} onClick={handleClick}>
-        <ErrorBoundary fallback={<div className={styles.imageError}>Error</div>}>
+    const entranceVariants: Variants = {
+      initial: { opacity: 0, scale: 0.8, y: 20 },
+      animate: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 150, damping: 20 } },
+      exit: { opacity: 0, scale: 0.8, y: -20, transition: { duration: 0.15 } },
+    };
+
+    return (
+      <motion.div
+        ref={combinedRef}
+        className={itemClassName}
+        style={sortableStyle}
+        layout
+        custom={{ zoom, groupCount }}
+        variants={entranceVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+        {...attributes}
+        {...listeners}
+        data-id={image.id}
+        data-testid={`image-item-${image.id}`}
+      >
+        {/* Drop target indicators */}
+        {isDropTarget && dropPosition === 'before' && (
+          <motion.div
+            ref={indicatorBeforeRef}
+            className={`${styles.dropIndicator} ${styles.dropIndicatorBefore}`}
+            layoutId={`drop-indicator-before-${image.id}`}
+          />
+        )}
+        <ErrorBoundary fallback={<div>Error</div>}>
           <Suspense
             fallback={
               <ImageSkeleton
-                containerWidth={targetWidth}
-                containerHeight={targetHeight}
+                containerWidth={containerWidth}
+                containerHeight={containerHeight}
                 placeholderColor={placeholderColor}
               />
             }
           >
             <SuspenseImage
               src={imageUrl}
-              alt={image.alt || 'Image'}
-              className={`${styles.image} ${styles.smooth}`}
+              alt={image.alt || image.title || 'Image'}
+              className={styles.imageContent}
+              draggable={false} // Prevent native image drag
               onError={handleImageError}
-              width={targetWidth}
-              height={targetHeight}
-              loading="lazy"
             />
           </Suspense>
         </ErrorBoundary>
-      </div>
+        {isDropTarget && dropPosition === 'after' && (
+          <motion.div
+            ref={indicatorAfterRef}
+            className={`${styles.dropIndicator} ${styles.dropIndicatorAfter}`}
+            layoutId={`drop-indicator-after-${image.id}`}
+          />
+        )}
+      </motion.div>
+    );
+  }
+);
 
-      {groupCount && groupCount > 1 && !isCarousel && (
-        <div className={styles.groupCount}>+{groupCount}</div>
-      )}
-    </motion.div>
-  );
-};
+ImageItem.displayName = 'ImageItem';
 
-export default memo(ImageItem);
+export default ImageItem;

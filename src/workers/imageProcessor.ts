@@ -62,8 +62,10 @@ class ImageProcessor {
     this.onError = options?.onError;
 
     // Initialize the queue and determine pool size
-    const concurrency =
+    const calculatedConcurrency =
       options?.concurrency ?? Math.max(1, (navigator.hardwareConcurrency || 4) - 1);
+    // Cap the concurrency at 4
+    const concurrency = Math.min(4, calculatedConcurrency);
     this.poolSize = concurrency; // poolSize is the same as queue concurrency for now
     this.queue = new PQueue({ concurrency: this.poolSize }); // Queue concurrency matches pool size
 

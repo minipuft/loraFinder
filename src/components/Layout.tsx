@@ -1,7 +1,8 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useRef } from 'react';
 // Removed ViewMode import, will get from context if needed internally
 import NexusOrb from './NexusOrb'; // Import NexusOrb
-import Sidebar from './Sidebar.js';
+// import Sidebar from './Sidebar.js'; // Comment out or remove old Sidebar
+import { TapestrySidebar } from './TapestrySidebar'; // Import new TapestrySidebar
 // import { getImages } from '../lib/api.js'; // Removed: Data fetching moved to hooks/ImageFeed
 import gsap from 'gsap';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
@@ -103,22 +104,21 @@ const Layout = forwardRef<HTMLDivElement, LayoutProps>(
     //   fetchImages();
     // }; // Removed: Needs replacement with react-query invalidation
 
+    // ++ Create a ref for the AuraBackground canvas element ++
+    const auraCanvasGlobalRef = useRef<HTMLCanvasElement>(null);
+
     // Render the layout structure
     return (
       <div ref={ref} className="flex flex-col h-screen relative bg-transparent">
         <ColorProvider>
           <div className="gradient-overlay"></div>
-          {/* Use AuraBackground instead of ParticleBackground */}
-          <AuraBackground />
+          {/* Pass the ref to AuraBackground */}
+          <AuraBackground ref={auraCanvasGlobalRef} />
           {/* <ParticleBackground /> */}
           <NexusOrb /> {/* Replaced Navbar with NexusOrb */}
           <div className="flex flex-1 overflow-hidden">
-            <Sidebar
-              ref={sidebarRef}
-              // Remove props now provided by context
-              // selectedFolder={selectedFolder}
-              // onFolderChange={onFolderChange}
-            />
+            {/* Pass the auraCanvasGlobalRef to TapestrySidebar */}
+            <TapestrySidebar auraCanvasRef={auraCanvasGlobalRef} />
             <main ref={mainRef} className="flex-1 overflow-auto p-4 relative bg-transparent">
               {contentAreaRef ? (
                 <div ref={contentAreaRef} className="relative z-10">

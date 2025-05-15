@@ -11,7 +11,7 @@ interface AnimationStepOptions {
 
 interface AnimationStep {
   id?: string; // Optional ID for the step
-  target: gsap.DOMTarget; // Element(s) to animate
+  target: gsap.DOMTarget | object; // MODIFIED: Allow plain objects for non-DOM animations
   preset: keyof typeof gsapConfigs | 'none'; // Use keys from gsapConfigs directly OR 'none'
   // options?: AnimationStepOptions; // Removed: Replace with vars
   vars?: gsap.TweenVars; // Allow any GSAP vars to be passed
@@ -62,18 +62,28 @@ export class AnimationPipeline {
         };
 
         // Handle initial state if the preset defines it
+        // This part primarily applies to DOMTargets where presets often define starting states.
+        // For generic object targets with preset: 'none', initialVars are less common
+        // and GSAP's .to() will tween from current values.
         if (hasInitialVars(presetConfig)) {
+          // We might need to be careful if target is not a DOMTarget here,
+          // but gsap.set is also flexible. For now, no explicit check.
           initialTweenVars = presetConfig.initialVars;
         }
       }
     }
 
-    // Apply initial state if defined (either from preset or potentially step vars in future)
-    if (initialTweenVars) {
+    // Apply initial state if defined
+    // gsap.set is flexible; it can set properties on plain objects too.
+    // However, this is typically for presets. If preset is 'none' and target is an object,
+    // initialTweenVars will likely be undefined, and GSAP tweens from current state.
+    if (initialTweenVars && typeof target === 'object' && target !== null) {
+      // Added a check for target being an object
       gsap.set(target, initialTweenVars);
     }
 
     // Add the tween to the timeline
+    // GSAP's .to() is flexible with target types (DOM elements, selectors, or generic objects)
     this.timeline.to(target, tweenVars, position);
     this.steps.push(step); // Store the step definition
 

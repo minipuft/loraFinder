@@ -25,7 +25,7 @@ import 'yet-another-react-lightbox/styles.css';
 import { useAnimationPipeline } from '../animations/AnimationManager';
 import { GroupingAnimator } from '../animations/presets/GroupingAnimator';
 import { useAppSettings } from '../contexts';
-import { ColorContext, HoverState } from '../contexts/ColorContext';
+import { ColorContext, ImagePalette } from '../contexts/ColorContext';
 import { DragProvider } from '../contexts/DragContext';
 import { useImageFeedCenter } from '../contexts/ImageFeedCenterContext';
 import { useImageProcessing } from '../contexts/ImageProcessingContext';
@@ -49,9 +49,7 @@ import {
   RowConfig,
 } from '../utils/layoutCalculator';
 import WorkerPool, { WorkerType } from '../workers/workerPool';
-import AuraBackground from './AuraBackground';
 import ErrorBoundary from './ErrorBoundary';
-import { ImageHoverData } from './ImageItem';
 import ImageRow from './ImageRow';
 import { LazyBannerView, LazyCarouselView, LazyMasonryView } from './lazy/lazyWidgets';
 import Spinner from './lazy/Spinner';
@@ -149,7 +147,7 @@ interface ColorRequestPayload {
 // Align this with what the color worker actually sends back in its payload
 interface ColorWorkerSuccessPayload {
   id: string;
-  color: string | null;
+  palette: ImagePalette | null;
 }
 
 // Define interface for potential drop target
@@ -184,10 +182,11 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
   const [lightboxIndex, setLightboxIndex] = useState<number>(-1);
   const [lightboxImages, setLightboxImages] = useState<ImageInfo[]>([]);
   const animationUtils = useMemo(() => AnimationUtils.getInstance(), []);
-  const { setDominantColors, setHoverState, hoverState } = useContext(ColorContext);
-  const [dominantColorMap, setDominantColorMap] = useState<Map<string, string>>(new Map());
+  const { setImagePalette } = useContext(ColorContext);
+  const [imagePaletteMap, setImagePaletteMap] = useState<Map<string, ImagePalette | null>>(
+    new Map()
+  );
   const requestedColorIds = useRef<Set<string>>(new Set());
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [restoredState, setRestoredState] = useState<ScrollState | null>(null);
   const previousFolderPathRef = useRef<string | null>(null);
   const rowHeightsRef = useRef<number[]>([]);
@@ -483,7 +482,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
   useEffect(() => {
     setLightboxIndex(-1);
     setLightboxImages([]);
-    setDominantColorMap(new Map());
+    setImagePaletteMap(new Map());
     requestedColorIds.current.clear();
     setFailedImageIds(new Set());
     setCalculatedRows([]);
@@ -561,7 +560,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
           imageInfo &&
           imageInfo.id &&
           imageInfo.src &&
-          !dominantColorMap.has(imageInfo.id) &&
+          !imagePaletteMap.has(imageInfo.id) &&
           !requestedColorIds.current.has(imageInfo.id)
         ) {
           const imageUrl = getImageUrl(imageInfo.src); // Now defined
@@ -575,11 +574,8 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
               { priority: 2 }
             )
             .then(result => {
-              if (result?.color) {
-                // Check if color exists and is non-null/empty string
-                setDominantColorMap(prevMap =>
-                  new Map(prevMap).set(result.id, result.color as string)
-                );
+              if (result?.palette) {
+                setImagePaletteMap(prevMap => new Map(prevMap).set(result.id, result.palette));
               }
             })
             .catch(error => {
@@ -966,59 +962,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
   }, [restoredState, scrollContainerRef, virtualItems, folderPath]); // Depend on restored state, ref, virtual items, and folderPath
   // --- End Scroll Restoration Effect ---
 
-  // Callback function for image hover - with delay logic and state check
-  const handleImageHover = useCallback(
-    (data: ImageHoverData) => {
-      // Clear any existing timeout
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-        hoverTimeoutRef.current = null;
-      }
-
-      // Read current state directly from the context value obtained above
-      const currentHoverState = hoverState;
-
-      if (data.isHovering) {
-        // Set a timeout to activate hover state after a delay
-        hoverTimeoutRef.current = setTimeout(() => {
-          const color = dominantColorMap.get(data.imageId) || null;
-          const newHoverState: HoverState = {
-            isHovering: true,
-            position: data.position,
-            color: color,
-          };
-
-          // Only update if the state would actually change
-          if (
-            !currentHoverState.isHovering ||
-            currentHoverState.position?.x !== newHoverState.position?.x || // Safe access
-            currentHoverState.position?.y !== newHoverState.position?.y || // Safe access
-            currentHoverState.color !== newHoverState.color
-          ) {
-            setHoverState(newHoverState);
-          }
-        }, 150); // 150ms delay
-      } else {
-        // If mouse leaves, immediately deactivate hover state ONLY IF it's currently active
-        if (currentHoverState.isHovering) {
-          setHoverState({ isHovering: false, position: null, color: null });
-        }
-      }
-    },
-    // Dependencies now include hoverState because we read it
-    [setHoverState, dominantColorMap, hoverState]
-  );
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    // Clear timeout if component unmounts
-    return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
-    };
-  }, []); // Empty dependency array ensures this runs only on mount and unmount
-
   // --- Color Extraction Worker Integration --- >
   useEffect(() => {
     if (virtualItems.length === 0 || calculatedRows.length === 0 || images.length === 0) return;
@@ -1032,7 +975,7 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
     const colorPromises: Promise<void>[] = [];
 
     visibleImageIds.forEach(id => {
-      if (!dominantColorMap.has(id) && !requestedColorIds.current.has(id)) {
+      if (!imagePaletteMap.has(id) && !requestedColorIds.current.has(id)) {
         const imageInfo = images.find(img => img.id === id);
         if (imageInfo?.src) {
           const imageUrl = getImageUrl(imageInfo.src);
@@ -1049,18 +992,16 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
               { priority: 1 } // Higher priority for visible items
             )
             .then(result => {
-              // Check result and specifically if color is a non-null string
-              if (result && typeof result.color === 'string') {
-                // Assign to a new variable to help TS with type narrowing inside the setter
-                const colorValue: string = result.color;
-                setDominantColorMap(prevMap => {
+              // Check result and specifically if palette is a non-null object
+              if (result && result.palette) {
+                const newPalette: ImagePalette = result.palette;
+                setImagePaletteMap(prevMap => {
                   const newMap = new Map(prevMap);
-                  // Use the explicitly typed colorValue
-                  newMap.set(result.id, colorValue);
+                  newMap.set(result.id, newPalette);
                   return newMap;
                 });
               } else {
-                // console.log(`[ImageFeed] Color extraction failed or null for ${result?.id}`);
+                // console.log(`[ImageFeed] Color extraction failed or null palette for ${result?.id}`);
               }
             })
             .catch(error => {
@@ -1080,46 +1021,64 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
     // before updating context, preventing rapid flickering.
     if (colorPromises.length > 0) {
       Promise.allSettled(colorPromises).then(() => {
-        // Re-calculate visible colors *after* potential map updates
-        const currentVisibleColors: string[] = [];
-        virtualItems.forEach(virtualItem => {
+        // Find the palette for the *first* visible image that has one
+        let firstVisiblePalette: ImagePalette | null = null;
+        for (const virtualItem of virtualItems) {
           const row = calculatedRows[virtualItem.index];
-          row?.images.forEach(img => {
-            // Read from the potentially updated dominantColorMap state
-            const itemColor = dominantColorMap.get(img.id);
-            if (itemColor) {
-              currentVisibleColors.push(itemColor);
+          if (row) {
+            for (const img of row.images) {
+              const itemPalette = imagePaletteMap.get(img.id);
+              if (itemPalette) {
+                firstVisiblePalette = itemPalette;
+                break; // Found a palette, use this one
+              }
             }
-          });
-        });
-        // Update context with the first 1 or 2 valid visible colors
-        if (currentVisibleColors.length > 0) {
-          // console.log('[ImageFeed] Updating context dominantColors after batch:', currentVisibleColors.slice(0, 2));
-          setDominantColors(currentVisibleColors.slice(0, 2));
+          }
+          if (firstVisiblePalette) break; // Stop searching rows if palette found
+        }
+
+        // Update context with the first visible palette, or null if none found
+        if (firstVisiblePalette) {
+          // console.log(
+          //   '[ImageFeed] Updating ColorContext with palette (after batch):',
+          //   firstVisiblePalette
+          // ); // REMOVED
+          setImagePalette(firstVisiblePalette);
         } else {
-          // console.log('[ImageFeed] No dominant colors found after batch, resetting context.');
-          setDominantColors([]); // Reset if no colors found
+          // console.log(
+          //   '[ImageFeed] No palette found for visible items after batch, setting context to null.'
+          // ); // REMOVED
+          setImagePalette(null);
         }
       });
     } else {
-      // If no new colors were requested, still update context based on current visible colors
-      // This handles scrolling without new requests
-      const currentVisibleColors: string[] = [];
-      virtualItems.forEach(virtualItem => {
+      // If no new colors were requested, still update context based on current visible items
+      let firstVisiblePalette: ImagePalette | null = null;
+      for (const virtualItem of virtualItems) {
         const row = calculatedRows[virtualItem.index];
-        row?.images.forEach(img => {
-          const itemColor = dominantColorMap.get(img.id);
-          if (itemColor) {
-            currentVisibleColors.push(itemColor);
+        if (row) {
+          for (const img of row.images) {
+            const itemPalette = imagePaletteMap.get(img.id);
+            if (itemPalette) {
+              firstVisiblePalette = itemPalette;
+              break;
+            }
           }
-        });
-      });
-      if (currentVisibleColors.length > 0) {
-        // console.log('[ImageFeed] Updating context dominantColors (no new requests):', currentVisibleColors.slice(0, 2));
-        setDominantColors(currentVisibleColors.slice(0, 2));
+        }
+        if (firstVisiblePalette) break;
+      }
+
+      if (firstVisiblePalette) {
+        // console.log(
+        //   '[ImageFeed] Updating ColorContext with palette (no new requests):',
+        //   firstVisiblePalette
+        // ); // REMOVED
+        setImagePalette(firstVisiblePalette);
       } else {
-        // console.log('[ImageFeed] No dominant colors found (no new requests), resetting context.');
-        setDominantColors([]); // Reset if no colors found
+        // console.log(
+        //   '[ImageFeed] No palette found for visible items (no new requests), setting context to null.'
+        // ); // REMOVED
+        setImagePalette(null);
       }
     }
 
@@ -1127,12 +1086,12 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
     // Cancellation is handled by the main dependency change effect.
   }, [
     workerPool,
-    virtualItems, // Re-run when visible items change
-    calculatedRows, // Re-run if row layout changes
-    images, // Re-run if images change
+    virtualItems,
+    calculatedRows,
+    images,
     getImageUrl,
-    dominantColorMap, // Re-run if the map updates (to potentially update context)
-    setDominantColors, // Context setter
+    imagePaletteMap,
+    setImagePalette,
   ]);
   // --- End Color Extraction Worker Integration ---
 
@@ -1317,9 +1276,8 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
                     workerPool={workerPool}
                     gap={gapSize}
                     containerWidth={containerWidth}
-                    onImageHover={handleImageHover}
                     onImageLoadError={handleImageLoadError}
-                    dominantColorMap={dominantColorMap}
+                    imagePaletteMap={imagePaletteMap}
                     onExitComplete={() => exitResolverRef.current && exitResolverRef.current()}
                     rowIndex={virtualItem.index}
                   />
@@ -1374,7 +1332,6 @@ const ImageFeed: React.FC<ImageFeedProps> = ({ scrollContainerRef }) => {
         position: 'relative',
       }}
     >
-      <AuraBackground />
       <div className={styles.feed}>
         <DragProvider
           initialImages={images}

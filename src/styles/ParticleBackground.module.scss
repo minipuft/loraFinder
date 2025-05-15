@@ -6,6 +6,7 @@
   height: 100%;
   overflow: hidden;
   pointer-events: none;
-  z-index: -1;
-  background: linear-gradient(180deg, rgba(2, 9, 22, 0.95) 0%, rgba(4, 16, 36, 0.98) 100%);
+  z-index: -1; /* Restored original z-index */
+  background: transparent; /* Keep transparent, shader draws content */
+  /* display: none; */ /* Removed to make AuraBackground visible again */
 }

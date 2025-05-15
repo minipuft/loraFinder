@@ -1,0 +1,81 @@
+// Basic structure
+.tapestrySidebar {
+  width: 220px; // Example width
+  height: 100vh;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  // background-color: rgba(0,0,0,0.1); // Temporary for layout visibility
+  // position: fixed; // Or part of a flex/grid layout
+  // top: 0;
+  // left: 0;
+  // z-index: 10; // Ensure it's above AuraBackground for HTML interaction
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto;
+    flex-grow: 1;
+
+    // Webkit Scrollbar Styles
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background-color: rgba(200, 200, 230, 0.3);
+      border-radius: 10px;
+      border: 1px solid rgba(220, 220, 255, 0.15);
+
+      &:hover {
+        background-color: rgba(200, 200, 230, 0.5);
+      }
+    }
+
+    // Firefox standard scrollbar styling (added for broader compatibility)
+    // These are applied directly to the element, not pseudo-elements like WebKit's.
+    // They offer less customization but provide a basic themed scrollbar.
+    scrollbar-width: thin;
+    scrollbar-color: rgba(200, 200, 230, 0.5) transparent; // thumb color, track color
+  }
+}
+
+.folderItem {
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.25rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition:
+    background-color 0.3s ease-in-out,
+    color 0.3s ease-in-out,
+    text-shadow 0.3s ease-in-out,
+    transform 0.2s ease-out;
+  color: #e0e0e0; // Changed from #ccc for better readability
+  background-color: transparent; // Explicitly transparent initially
+
+  &:hover {
+    background-color: rgba(200, 200, 230, 0.22); // Changed for more distinct hover
+    color: #ffffff;
+    // Subtle glow effect for hover, slightly intensified
+    text-shadow: 0 0 9px rgba(210, 210, 240, 0.75);
+  }
+
+  &.selected {
+    font-weight: bold;
+    color: #ffffff;
+    // A slightly more persistent but still subtle glow for selected
+    text-shadow: 0 0 10px rgba(180, 180, 230, 0.7);
+  }
+}
+
+.sidebarLoading {
+  // Styles for loading state
+  width: 220px;
+  padding: 1rem;
+  color: #ccc; // Can be updated if needed, but less critical than active items
+}

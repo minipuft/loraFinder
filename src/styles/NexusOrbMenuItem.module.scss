@@ -32,10 +32,10 @@
   }
 
   &.active {
-    background-color: rgba(var(--theme-primary-rgb, 122, 162, 247), 0.4);
-    border-color: rgba(var(--theme-primary-rgb, 122, 162, 247), 1);
+    background-color: rgba(var(--theme-accent-cyan-rgb), 0.4);
+    border-color: rgba(var(--theme-accent-cyan-rgb), 1);
     color: rgba(var(--theme-text-rgb, 255, 255, 255), 1);
-    box-shadow: 0 0 10px rgba(var(--theme-primary-rgb, 122, 162, 247), 0.5);
+    box-shadow: 0 0 10px rgba(var(--theme-accent-cyan-rgb), 0.5);
   }
 
   &.searchInputMode {

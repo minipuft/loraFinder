@@ -13,10 +13,22 @@ export default function useViewport(): Viewport {
   const [scrollY, setScrollY] = useState<number>(window.scrollY);
 
   useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
-    window.addEventListener('scroll', handleScroll);
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrollY(window.scrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    // Add { passive: true } for better scroll performance
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    // Initial call to set scrollY, in case the page is already scrolled on load.
+    handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
 
   return {
     rect: {

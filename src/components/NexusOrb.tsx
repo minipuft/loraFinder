@@ -44,7 +44,7 @@ const NexusOrb: React.FC = () => {
   const orbContainerRef = useRef<HTMLDivElement>(null);
 
   const { data: currentDirectoryPath, isLoading, isError } = useCurrentDirectory();
-  const { dominantColors } = useContext(ColorContext);
+  const { imagePalette } = useContext(ColorContext);
   const {
     viewMode,
     handleViewModeChange,
@@ -56,8 +56,10 @@ const NexusOrb: React.FC = () => {
   } = useAppSettings();
   const viewport = useViewport();
 
-  const primaryColorRgb = dominantColors[0] ? hexToRgbString(dominantColors[0]) : '122, 162, 247';
-  const secondaryColorRgb = dominantColors[1] ? hexToRgbString(dominantColors[1]) : primaryColorRgb;
+  const primaryColorRgb = imagePalette?.base ? hexToRgbString(imagePalette.base) : '122, 162, 247'; // Default primary
+  const secondaryColorRgb = imagePalette?.complementary
+    ? hexToRgbString(imagePalette.complementary)
+    : primaryColorRgb; // Fallback to primary if complementary not available or no palette
 
   const orbStyle: CSSProperties = {
     '--nexus-glow-color-default': `rgba(${primaryColorRgb}, 0.5)`,
